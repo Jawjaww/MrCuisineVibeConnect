@@ -15,7 +15,7 @@ object Palette {
     val BRAND_PRESSED = 0xFF2C4525.toInt()
     val BOTANICAL = 0xFF559514.toInt()
     /** Piste de l'arc des cadrans et graduations intérieures. */
-    val ARC_TRACK = 0xFFD4CABA.toInt()
+    val ARC_TRACK = 0xFFDED8CE.toInt()
     val TICK = 0xFFCFC7BC.toInt()
     /** Dégradé du bouton principal, du vert jaune au vert forêt. */
     val START_TOP = 0xFF5A9620.toInt()

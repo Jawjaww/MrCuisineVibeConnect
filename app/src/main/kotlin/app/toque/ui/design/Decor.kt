@@ -6,8 +6,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -56,12 +54,12 @@ object Decor {
         val output = Bitmap.createBitmap(1024, 600, Bitmap.Config.RGB_565)
         val canvas = Canvas(output)
         canvas.drawColor(T.BG)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 200 }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 165 }
         // Basilic en bas à gauche, tomates en haut à droite, poivre en bas à droite.
         val destinations = listOf(
-            RectF(-30f, 300f, 330f, 628f),
-            RectF(740f, -40f, 1080f, 215f),
-            RectF(830f, 350f, 1070f, 610f),
+            RectF(-70f, 250f, 380f, 700f),
+            RectF(700f, -90f, 1120f, 250f),
+            RectF(800f, 320f, 1120f, 660f),
         )
         var drawn = false
         for (index in files.indices) {
@@ -81,7 +79,7 @@ object Decor {
                 null
             }
             if (image != null) {
-                drawPhoto(canvas, image, destinations[index], paint)
+                canvas.drawBitmap(image, null, destinations[index], paint)
                 image.recycle()
                 drawn = true
             }
@@ -102,26 +100,6 @@ object Decor {
         }
         canvas.drawRect(0f, 0f, 1024f, 600f, veil)
         return output
-    }
-
-    /**
-     * Dessine une photo avec un masque radial : les bords du rectangle disparaissent, seule la
-     * matière floue reste visible. Composition unique, hors thread principal.
-     */
-    private fun drawPhoto(canvas: Canvas, image: Bitmap, dest: RectF, paint: Paint) {
-        val mask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(
-                dest.centerX(), dest.centerY(), maxOf(dest.width(), dest.height()) * 0.62f,
-                intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
-                floatArrayOf(0f, 0.42f, 1f),
-                Shader.TileMode.CLAMP,
-            )
-            xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        }
-        val layer = canvas.saveLayer(dest, null)
-        canvas.drawBitmap(image, null, dest, paint)
-        canvas.drawRect(dest, mask)
-        canvas.restoreToCount(layer)
     }
 
     private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)

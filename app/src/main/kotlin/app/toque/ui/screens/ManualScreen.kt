@@ -83,6 +83,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.05f)
+            visibility = View.GONE
         }
         root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
 
@@ -93,16 +94,16 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
         }
         accessoryToggle.configure(tr("Fouet"), Icon.Kind.WHISK, tr("Lame"), Icon.Kind.BLADE)
-        commands.addView(directionToggle, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
-        commands.addView(accessoryToggle, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+        // Les commandes se répartissent sous les cadrans, comme sur la référence.
+        commands.addView(directionToggle, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        commands.addView(accessoryToggle, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
-        commands.addView(turbo, Ui.lp(Ui.WRAP, Ui.WRAP))
-        commands.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
+        commands.addView(turbo, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
         commands.addView(startButton, Ui.lp(Ui.u(240), Ui.u(86)))
-        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP))
+        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP, t = 26))
         refresh()
         return root
     }
@@ -264,8 +265,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
         val warnings = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
             .filter { it.code != SafetyPolicy.HOT_BLEND }
-        hint.text = warnings.firstOrNull()?.message
-            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else ""
+        setHint(warnings.firstOrNull()?.message
+            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else "")
         startButton.setEnabledState(warnings.isEmpty())
     }
 
@@ -302,15 +303,21 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         startButton.visibility = if (busy && s.state != JobState.PAUSED) View.GONE else View.VISIBLE
         startButton.setLabel(if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer"))
         turbo.setButtonEnabled(!busy || s.turboActive)
-        if (live) hint.text = tr("Réglages appliqués en direct")
+        if (live) setHint(tr("Réglages appliqués en direct"))
         else if (!busy) refreshHintOnly()
     }
 
     private fun refreshHintOnly() {
         val warnings = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
             .filter { it.code != SafetyPolicy.HOT_BLEND }
-        hint.text = warnings.firstOrNull()?.message
-            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else ""
+        setHint(warnings.firstOrNull()?.message
+            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else "")
+    }
+
+    /** La ligne d'aide ne réserve de la place que lorsqu'elle a quelque chose à dire. */
+    private fun setHint(text: String) {
+        hint.text = text
+        hint.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
     }
 
     override fun onKnob(delta: Int): Boolean {

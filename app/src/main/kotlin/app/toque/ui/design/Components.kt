@@ -66,25 +66,28 @@ object Focusable {
 }
 
 /**
- * Disque avec ombre douce. L'ombre est un dégradé radial dessiné avant le fond : aucun
- * `setShadowLayer`, aucun flou, coût constant même sur le MT6580 du robot.
+ * Ombre douce sans flou : des cercles concentriques à très faible alpha, cumulés de l'extérieur
+ * vers l'intérieur. Le dégradé radial produisait un anneau dur au bord du disque ; ici la densité
+ * décroît linéairement vers l'extérieur, comme une vraie ombre portée.
  */
-class SoftCircle(context: Context, private val shadowAlpha: Int = 32) : FrameLayout(context) {
-    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+object Shadow {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
 
+    fun draw(canvas: Canvas, cx: Float, cy: Float, radius: Float, spread: Float, alpha: Int, offsetY: Float = 0f) {
+        if (radius <= 0f) return
+        val steps = 14
+        paint.alpha = alpha
+        for (i in steps downTo 1) {
+            canvas.drawCircle(cx, cy + offsetY, radius + spread * i / steps, paint)
+        }
+    }
+}
+
+/** Disque avec ombre douce, dessinée avant le fond : aucun flou, coût constant. */
+class SoftCircle(context: Context, private val spread: Int = 7, private val alpha: Int = 5) : FrameLayout(context) {
     override fun draw(canvas: Canvas) {
         val radius = minOf(width, height) / 2f
-        if (radius > 0f) {
-            val blur = Ui.uf(9f)
-            val cy = height / 2f + Ui.uf(2.5f)
-            shadowPaint.shader = RadialGradient(
-                width / 2f, cy, radius + blur,
-                intArrayOf(Color.argb(shadowAlpha, 0, 0, 0), Color.TRANSPARENT),
-                floatArrayOf(radius / (radius + blur), 1f),
-                Shader.TileMode.CLAMP,
-            )
-            canvas.drawCircle(width / 2f, cy, radius + blur, shadowPaint)
-        }
+        Shadow.draw(canvas, width / 2f, height / 2f, radius, Ui.uf(spread.toFloat()), alpha, Ui.uf(2f))
         super.draw(canvas)
     }
 }
@@ -106,14 +109,14 @@ class RoundButton(
     size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context)
+    private val circle = SoftCircle(context, spread = if (size < 60) 4 else 7, alpha = if (size < 60) 3 else 4)
     private val icon = Icon(context, iconKind, T.TEXT)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT2) else null
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 20 else 26), Ui.u(if (size < 60) 20 else 26), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 18 else 26), Ui.u(if (size < 60) 18 else 26), Gravity.CENTER))
         Focusable.states(circle, size / 2f, selected = T.BRAND)
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
@@ -212,8 +215,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 54) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 54) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 46) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 46) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -238,10 +241,10 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         }
         addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(54), Ui.u(54), r = 10))
-        actions.addView(plus, Ui.lp(Ui.u(54), Ui.u(54)))
-        // Les boutons chevauchent le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(54), t = -14))
+        actions.addView(minus, Ui.lp(Ui.u(46), Ui.u(46), r = 8))
+        actions.addView(plus, Ui.lp(Ui.u(46), Ui.u(46)))
+        // Les boutons sont posés sur le bas du disque, comme sur la maquette.
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(46), t = -24))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
@@ -337,20 +340,12 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             val layer = staticLayer ?: buildLayer(size, cx, cy, radius, arcRadius).also { staticLayer = it }
             canvas.drawBitmap(layer, 0f, 0f, null)
 
-            arcPaint.strokeWidth = Ui.uf(if (isFocused || isSelected) T.Line.FOCUS else T.Line.HAIR)
-            arcPaint.color = when {
-                isFocused -> T.BRAND
-                isSelected -> T.BOTANICAL
-                else -> T.STROKE
-            }
-            if (isFocused) arcPaint.strokeWidth = Ui.uf(2f)
-            val edge = radius + Ui.uf(2f)
-            bounds.set(cx - edge, cy - edge, cx + edge, cy + edge)
-            canvas.drawArc(bounds, 135f, 270f, false, arcPaint)
-
-            bounds.set(cx - arcRadius, cy - arcRadius, cx + arcRadius, cy + arcRadius)
-            arcPaint.strokeWidth = Ui.uf(6f)
-            arcPaint.color = T.ARC_TRACK
+            // Piste et progression à l'extérieur du disque blanc : le bord du cadran reste net.
+            val ringRadius = radius + Ui.uf(1f)
+            bounds.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
+            arcPaint.strokeWidth = Ui.uf(3f)
+            // Le cadran actif se signale par un anneau vert pâle, sans ajouter de trait d'état.
+            arcPaint.color = if (isFocused || isSelected) withAlpha(T.BOTANICAL, 0x6A) else T.ARC_TRACK
             canvas.drawArc(bounds, 135f, 270f, false, arcPaint)
             arcPaint.color = T.BOTANICAL
             if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, arcPaint)
@@ -377,24 +372,17 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private fun buildLayer(size: Float, cx: Float, cy: Float, radius: Float, arcRadius: Float): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            val blur = Ui.uf(12f)
-            shadowPaint.shader = RadialGradient(
-                cx, cy + Ui.uf(4f), radius + blur,
-                intArrayOf(Color.argb(30, 0, 0, 0), Color.TRANSPARENT),
-                floatArrayOf(radius / (radius + blur), 1f),
-                Shader.TileMode.CLAMP,
-            )
-            canvas.drawCircle(cx, cy + Ui.uf(4f), radius + blur, shadowPaint)
+            Shadow.draw(canvas, cx, cy, radius, Ui.uf(14f), 5, Ui.uf(4f))
             discPaint.color = T.SURFACE
             discPaint.style = Paint.Style.FILL
             canvas.drawCircle(cx, cy, radius, discPaint)
 
-            tickPaint.strokeWidth = Ui.uf(1.4f)
+            tickPaint.strokeWidth = Ui.uf(1.2f)
             tickPaint.color = T.TICK
             for (i in 0..44) {
                 val angle = Math.toRadians((135 + i * 6).toDouble())
-                val inner = arcRadius - Ui.uf(if (i % 5 == 0) 20f else 13f)
-                val outer = arcRadius - Ui.uf(7f)
+                val inner = radius - Ui.uf(if (i % 5 == 0) 22f else 15f)
+                val outer = radius - Ui.uf(8f)
                 canvas.drawLine(
                     cx + (inner * Math.cos(angle)).toFloat(),
                     cy + (inner * Math.sin(angle)).toFloat(),
@@ -467,6 +455,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     companion object {
         /** Diamètre du cadran, en unités de la grille 1024×600. */
         const val SIZE = 248
+
+        private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
     }
 }
 
