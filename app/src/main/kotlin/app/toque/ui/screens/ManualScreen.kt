@@ -102,7 +102,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             setPadding(Ui.u(14), Ui.u(12), Ui.u(14), Ui.u(14))
         }
         weightBadge = WeightBadge(c)
-        right.addView(weightBadge, Ui.lp(Ui.MATCH, Ui.u(120)))
+        right.addView(weightBadge, Ui.lp(Ui.u(240), Ui.u(120)))
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.05f)
@@ -286,6 +286,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         timeDial.repeatEnabled = true
         tempDial.repeatEnabled = !live
         speedDial.repeatEnabled = !live
+        bladeButton.setButtonEnabled(!live)
+        whiskButton.setButtonEnabled(!live)
 
         if (live && !pendingEdit) {
             val remaining = ((s.remainingMs + 999) / 1000).toInt().coerceAtLeast(1)

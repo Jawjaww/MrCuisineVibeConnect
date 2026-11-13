@@ -41,7 +41,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
     private val temp = Ui.chip(a, "", Icon.Kind.THERMO, Ui.TEXT2)
     private val lid = Ui.chip(a, tr("Couvercle ouvert"), Icon.Kind.LID, Ui.WARN, Ui.WARN_WASH)
     private val link = Ui.chip(a, "", Icon.Kind.LINK, Ui.TEXT2)
-    private val clock = Ui.text(a, "", 22f, Ui.TEXT, Ui.LIGHT)
+    private val clock = Ui.text(a, "", 22f, Ui.TEXT, Ui.LIGHT).apply { Ui.focusable(this, 18f, normal = Ui.BG, pressed = Ui.SURFACE3) }
     private val home = Icon(a, Icon.Kind.HOME, Ui.TEXT2)
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
