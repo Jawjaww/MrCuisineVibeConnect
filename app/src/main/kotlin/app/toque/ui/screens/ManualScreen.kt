@@ -23,7 +23,7 @@ import app.toque.ui.Ui
 import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
-import app.toque.ui.design.ReadoutCard
+import app.toque.ui.design.MiniCircle
 import app.toque.ui.design.RoundButton
 import app.toque.ui.screens.ScaleScreen
 import app.toque.ui.design.ToggleRoundButton
@@ -47,7 +47,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var startButton: PrimaryButton
     private lateinit var hint: TextView
     private lateinit var turbo: HoldRoundButton
-    private lateinit var readout: ReadoutCard
+    private lateinit var weightMini: MiniCircle
+    private lateinit var tempMini: MiniCircle
     private var dialSize = Dial.SIZE
 
     private var live = false
@@ -60,18 +61,30 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        // La grille de référence est 1024×600, mais l'écran peut offrir plus de largeur
-        // (2400×1080 donne 1333 unités). On répartit donc sur la largeur réellement disponible.
-        val usable = Ui.widthUnits - 88f
-        // Plafond : la barre machine (~76 unités) apparaît en bas pendant une cuisson et réduit
-        // d'autant la zone de contenu. Les cadrans sont bornés pour que rien ne soit rogné
-        // dans les deux états, avec ou sans barre.
-        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 300)
-        val root = Ui.vertical(c)
-        root.setPadding(Ui.u(71), Ui.u(14), Ui.u(22), Ui.u(10))
+        // Tableau de bord : les cadrans doivent dominer, comme sur un appareil de cuisine.
+        //   mini-cadrans 90 · cadrans ≤ 315 · débord des − / + · Démarrer 60
+        // Les commandes se posent à cheval sur les flancs des cadrans, dans leur zone basse.
+        val contentWidth = (Ui.widthUnits - 32f).toInt()
+        val button = 76
+        // 300 : le plus grand cadran qui laisse la place aux − / + puis à Démarrer.
+        dialSize = ((contentWidth - 40f) / 3f).toInt().coerceIn(150, 300)
+        // Gouttière fixe : les trois cadrans restent serrés. Le surplus de largeur va aux marges,
+        // pas entre eux — sinon ils se retrouvent écartés de 15 % de l'écran sur un grand écran.
+        val gap = 18
+        val used = 3 * dialSize + 2 * gap
+        val left = ((contentWidth - used) / 2).coerceAtLeast(0)
+        val controlTop = 330
 
-        // Rangée haute : les trois cadrans, puis la carte des valeurs resserrée à droite.
-        val dials = Ui.horizontal(c, Gravity.TOP)
+        val dash = FrameLayout(c)
+        dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
+
+        // --- Coins hauts : poids à gauche, température à droite.
+        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 90)
+        dash.addView(weightMini, at(left, 0, 90, 90))
+        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 90)
+        dash.addView(tempMini, at(left + used - 90, 0, 90, 90))
+
+        // --- Les trois grands cadrans.
         timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED, size = dialSize)
         tempDial = Dial(c, Icon.Kind.THERMO, size = dialSize)
@@ -80,19 +93,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
-            dials.addView(dial, LinearLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
-                if (index < 2) rightMargin = Ui.u(1)
-            })
+            dash.addView(dial, at(left + index * (dialSize + gap), 96, dialSize, dialSize + 100))
         }
-        val topRow = Ui.horizontal(c, Gravity.TOP)
-        topRow.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
-        topRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
-        readout = ReadoutCard(c)
-        topRow.addView(readout, Ui.lp(Ui.u(cardWidth()), Ui.u((cardWidth() * 0.95f).toInt()), t = 68, r = 10))
-        root.addView(topRow, Ui.lp(Ui.MATCH, Ui.WRAP))
 
-
-        // Rangée basse : commandes sous les cadrans, bouton principal sous la carte.
         directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
         directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
         accessoryToggle = ToggleRoundButton(c) {
@@ -102,45 +105,43 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
-
-        // Les commandes sont centrées sous leur cadran : centre du cadran = 42 + 129 = 171
-        // depuis le début de la rangée, la pastille faisant 85 de large.
-        // Les commandes sont resserrées : elles n'ont pas besoin de toute la largeur.
-        val controlWidth = 85
         val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
-        val bottomRow = Ui.horizontal(c, Gravity.BOTTOM)
-        val gap = 22
-        bottomRow.addView(directionToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP))
-        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
-        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
-        bottomRow.addView(weigh, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
-        bottomRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
-        startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        bottomRow.addView(startButton, Ui.lp(Ui.u(238), Ui.u(73)))
-        root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 4))
 
-        // Le message d'aide est superposé dans la bande libre entre les commandes et Démarrer :
-        // il ne pousse plus rien quand il apparaît, et la barre machine ne le rogne plus.
-        val frame = FrameLayout(c)
-        frame.addView(root, FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH))
+        // --- Commandes sur les flancs, un peu sous la ligne des − / +.
+        val half = button / 2
+        val sideX = listOf(
+            left,
+            left + dialSize + gap / 2 - half,
+            left + 2 * dialSize + (gap + gap / 2) - half,
+            left + used - button,
+        )
+        val controls = listOf(weigh, directionToggle, accessoryToggle, turbo)
+        for ((index, control) in controls.withIndex()) {
+            dash.addView(control, at(sideX[index], controlTop, button, 101))
+        }
+
+        // --- Démarrer, seul dans le coin bas-droit.
+        startButton = PrimaryButton(c, tr("Démarrer")) { start() }
+        dash.addView(startButton, at(left + used - 238, 442, 238, 58))
+
+        // Message d'aide dans la bande haute, entre les deux mini-cadrans.
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.05f)
             visibility = View.GONE
         }
-        val free = (Ui.widthUnits - 22f - 238f - 24f - 406f - 22f).toInt().coerceAtLeast(200)
-        frame.addView(hint, FrameLayout.LayoutParams(Ui.u(minOf(free, 380)), Ui.WRAP, Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = Ui.u(238 + 24)
-            bottomMargin = Ui.u(6)
-        })
+        dash.addView(hint, at(left + 100, 16, (used - 200).coerceAtLeast(200), 54))
+
         refresh()
-        return frame
+        return dash
     }
 
-    /** La carte des valeurs occupe ~16 % de la largeur disponible, entre 160 et 240 unités. */
-    private fun cardWidth(): Int = (Ui.widthUnits * 0.16f).toInt().coerceIn(160, 240)
-
-    private fun divider(): View = View(c).apply { setBackgroundColor(Ui.STROKE) }
+    /** Position absolue dans la grille du tableau de bord, en unités 1024×600. */
+    private fun at(x: Int, y: Int, w: Int, h: Int, gravity: Int = Gravity.TOP or Gravity.START) =
+        FrameLayout.LayoutParams(Ui.u(w), Ui.u(h), gravity).apply {
+            leftMargin = Ui.u(x)
+            topMargin = Ui.u(y)
+        }
 
     private val tempSteps: IntArray get() = intArrayOf(0) + (1..19).toList().toIntArray()
 
@@ -317,7 +318,10 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (s.speedLevel > 0) (s.speedLevel / 10f).coerceIn(0f, 1f) else null)
 
-        readout.set(if (s.hasSample) s.actualTempC else null, if (s.hasSample) s.weightG else null)
+        tempMini.set(if (s.hasSample) "${s.actualTempC} °C" else "—", s.hasSample)
+        weightMini.set(if (s.hasSample) "${s.weightG} g" else "—", s.hasSample)
+        weightMini.contentDescription =
+            if (s.hasSample) tr("Balance : %d g", s.weightG) else tr("Base non connectée")
 
         val manualJob = s.kind?.name == "MANUAL" &&
             (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
@@ -341,7 +345,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         wasLive = live
 
         val busy = s.busy
-        startButton.visibility = if (busy && s.state != JobState.PAUSED) View.GONE else View.VISIBLE
+        // La barre machine a son propre bouton de reprise : Démarrer laisse la place entière
+        // à la zone basse dès qu'un programme est actif.
+        startButton.visibility = if (s.jobActive || s.turboActive || s.hasFault) View.GONE else View.VISIBLE
         startButton.setLabel(if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer"))
         turbo.setButtonEnabled(!busy || s.turboActive)
         if (live) setHint(tr("Réglages appliqués en direct"))

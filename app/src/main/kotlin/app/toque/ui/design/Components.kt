@@ -144,6 +144,7 @@ class DiscBackground(
     private val spread: Int,
     private val alpha: Int,
     private val cast: Boolean = false,
+    face: Int = T.BUTTON_FACE,
 ) : Drawable() {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -156,6 +157,10 @@ class DiscBackground(
         invalidateSelf()
         return true
     }
+
+    /** Teinte de la face : ivoire clair, pour se détacher aussi du blanc des cadrans. */
+    var face: Int = face
+        @Suppress("UNUSED_PARAMETER") set
 
     override fun draw(canvas: Canvas) {
         val side = bounds.width()
@@ -177,9 +182,13 @@ class DiscBackground(
         fill.color = when {
             selected -> T.BRAND
             pressed -> T.SURFACE2
-            else -> T.BUTTON_FACE
+            else -> face
         }
         canvas.drawCircle(cx, cy, radius, fill)
+        // Filet discret : une pastille blanche posée sur un cadran blanc doit rester lisible.
+        ring.color = T.STROKE
+        ring.strokeWidth = Ui.uf(T.Line.HAIR)
+        canvas.drawCircle(cx, cy, radius - ring.strokeWidth / 2f, ring)
         if (focused) {
             ring.color = if (selected) T.SURFACE else T.BRAND
             ring.strokeWidth = Ui.uf(T.Line.FOCUS)
@@ -193,11 +202,17 @@ class DiscBackground(
 }
 
 /** Disque de bouton : la vue réserve le débord nécessaire à la pénombre. */
-class SoftCircle(context: Context, spread: Int = 5, alpha: Int = 46, cast: Boolean = false) : FrameLayout(context) {
+class SoftCircle(
+    context: Context,
+    spread: Int = 5,
+    alpha: Int = 46,
+    cast: Boolean = false,
+    face: Int = T.BUTTON_FACE,
+) : FrameLayout(context) {
     init {
         isClickable = true
         isFocusable = true
-        background = DiscBackground(spread, alpha, cast)
+        background = DiscBackground(spread, alpha, cast, face)
     }
 }
 
@@ -224,7 +239,13 @@ class RoundButton(
 
     /** Taille réellement occupée : le disque plus la place de sa pénombre. */
     val outerSize: Int = size + 2 * spread
-    private val circle = SoftCircle(context, spread = spread, alpha = shadowAlpha ?: 32, cast = castShadow)
+    private val circle = SoftCircle(
+        context,
+        spread = spread,
+        alpha = shadowAlpha ?: 32,
+        cast = castShadow,
+        face = if (castShadow) T.BUTTON_FACE else T.SURFACE,
+    )
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
@@ -341,16 +362,18 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        face.hasBottomIcon = bottomIcon != null
+        // L'icône de dessous n'a de place que sur un grand cadran ; sinon elle chevauche la légende.
+        val showBottom = bottomIcon != null && size >= 240
+        face.hasBottomIcon = showBottom
         val box = FrameLayout(context)
         box.addView(face, Ui.flp(Ui.u(size), Ui.u(size)))
         box.addView(
             Icon(context, topIcon, T.TEXT),
             Ui.flp(Ui.u(34), Ui.u(34), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(30) },
         )
-        if (bottomIcon != null) {
+        if (showBottom) {
             box.addView(
-                Icon(context, bottomIcon, T.TEXT),
+                Icon(context, bottomIcon!!, T.TEXT),
                 Ui.flp(Ui.u(34), Ui.u(34), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(30) },
             )
         }
@@ -359,7 +382,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
         actions.addView(plus, Ui.lp(Ui.u(plus.outerSize), Ui.u(plus.outerSize)))
         // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = -44))
+        // Sur un petit cadran, un chevauchement fort mangerait la légende.
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = if (size >= 240) -44 else -30))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
@@ -503,11 +527,12 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             discPaint.style = Paint.Style.FILL
             canvas.drawCircle(cx, cy, radius, discPaint)
 
+            // Graduations strictement identiques : aucune ne doit se lire comme une aiguille.
             tickPaint.strokeWidth = Ui.uf(1.2f)
             tickPaint.color = T.TICK
             for (i in 0..44) {
                 val angle = Math.toRadians((135 + i * 6).toDouble())
-                val inner = radius - Ui.uf(if (i % 5 == 0) 22f else 15f)
+                val inner = radius - Ui.uf(15f)
                 val outer = radius - Ui.uf(8f)
                 canvas.drawLine(
                     cx + (inner * Math.cos(angle)).toFloat(),
@@ -707,37 +732,32 @@ class WeightBadge(context: Context) : LinearLayout(context) {
     }
 }
 
-/** Valeurs courantes (température mesurée, poids) réunies au-dessus du bouton principal. */
-class ReadoutCard(context: Context) : LinearLayout(context) {
-    private val temp = Ui.text(context, "—", T.Type.H2, T.TEXT, Ui.MEDIUM)
-    private val weight = Ui.text(context, "—", T.Type.H2, T.TEXT, Ui.MEDIUM)
-    private val underline = View(context).apply { setBackgroundColor(T.BOTANICAL) }
+/** Mini-cadran d'information : un disque de 90 pour une valeur mesurée (poids, température). */
+class MiniCircle(
+    context: Context,
+    iconKind: Icon.Kind,
+    private val showBar: Boolean = false,
+    private val size: Int = 100,
+) : FrameLayout(context) {
+    private val face = SoftCircle(context, spread = 5, alpha = 36)
+    private val icon = Icon(context, iconKind, T.TEXT2)
+    private val value = Ui.text(context, "—", T.Type.MICRO, T.TEXT, Ui.MEDIUM)
+    private val bar = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
-        orientation = VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-        background = Ui.round(T.BUTTON_FACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
-        setPadding(Ui.u(16), Ui.u(16), Ui.u(16), Ui.u(16))
-        // Les deux valeurs se répartissent sur la hauteur de la carte.
-        addView(row(Icon.Kind.THERMO, temp), Ui.lp(Ui.MATCH, 0, weight = 1f))
-        addView(View(context).apply { setBackgroundColor(T.STROKE) }, Ui.lp(Ui.MATCH, Ui.u(1)))
-        addView(row(Icon.Kind.SCALE, weight), Ui.lp(Ui.MATCH, 0, weight = 1f))
-        addView(underline, Ui.lp(Ui.u(80), Ui.u(4), t = 6))
+        val column = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
+        column.addView(icon, Ui.lp(Ui.u(20), Ui.u(20)))
+        column.addView(value, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+        if (showBar) column.addView(bar, Ui.lp(Ui.u(26), Ui.u(3), t = 3))
+        face.addView(column, FrameLayout.LayoutParams(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
+        addView(face, FrameLayout.LayoutParams(Ui.u(size), Ui.u(size)))
     }
 
-    private fun row(icon: Icon.Kind, value: TextView): LinearLayout {
-        val line = Ui.horizontal(context, Gravity.CENTER_VERTICAL)
-        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(30), Ui.u(30), r = 12))
-        line.addView(value)
-        return line
-    }
-
-    fun set(tempC: Int?, weightG: Int?) {
-        temp.text = if (tempC != null) "$tempC °C" else "—"
-        temp.setTextColor(if (tempC != null) T.TEXT else T.TEXT3)
-        weight.text = if (weightG != null) "$weightG g" else "—"
-        weight.setTextColor(if (weightG != null) T.TEXT else T.TEXT3)
-        underline.visibility = if (weightG != null) View.VISIBLE else View.INVISIBLE
+    fun set(text: String, active: Boolean) {
+        value.text = text
+        value.setTextColor(if (active) T.TEXT else T.TEXT3)
+        icon.color = if (active) T.BRAND else T.TEXT2
+        if (showBar) bar.visibility = if (active) View.VISIBLE else View.INVISIBLE
     }
 }
 
