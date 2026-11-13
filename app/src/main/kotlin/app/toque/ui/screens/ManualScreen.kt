@@ -58,10 +58,11 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
+        // Grille relevée sur la maquette de référence (1024×600).
         val root = Ui.vertical(c)
-        root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(12))
+        root.setPadding(Ui.u(71), Ui.u(14), Ui.u(22), Ui.u(10))
 
-        // Rangée haute : les trois cadrans, puis la carte des valeurs sur la droite.
+        // Rangée haute : les trois cadrans, puis la carte des valeurs resserrée à droite.
         val dials = Ui.horizontal(c, Gravity.TOP)
         timeDial = Dial(c, Icon.Kind.CLOCK)
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED)
@@ -72,14 +73,14 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
             dials.addView(dial, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply {
-                if (index < 2) rightMargin = Ui.u(14)
+                if (index < 2) rightMargin = Ui.u(1)
             })
         }
         val topRow = Ui.horizontal(c, Gravity.TOP)
         topRow.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
         topRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         readout = ReadoutCard(c)
-        topRow.addView(readout, Ui.lp(Ui.u(232), Ui.WRAP))
+        topRow.addView(readout, Ui.lp(Ui.u(112), Ui.u(108), t = 68, r = 10))
         root.addView(topRow, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
@@ -87,12 +88,11 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             setLineSpacing(0f, 1.05f)
             visibility = View.GONE
         }
-        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
+        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 6))
 
-        // Rangée basse : les commandes sous les cadrans, le bouton principal sous la carte.
-        val direction = ToggleRoundButton(c) { setReverse(!reverse) }
-        directionToggle = direction
-        direction.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
+        // Rangée basse : commandes sous les cadrans, bouton principal sous la carte.
+        directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
+        directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
         accessoryToggle = ToggleRoundButton(c) {
             setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
         }
@@ -101,16 +101,27 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
 
-        val bottomRow = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
-        bottomRow.addView(direction, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP))
-        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply { leftMargin = Ui.u(14) })
-        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply { leftMargin = Ui.u(14) })
+        // Les commandes sont centrées sous leur cadran : centre du cadran = 42 + 129 = 171
+        // depuis le début de la rangée, la pastille faisant 85 de large.
+        val controlWidth = 85
+        val firstMargin = (Dial.SIZE / 2 - controlWidth / 2) - 42
+        val spacing = Dial.SIZE - controlWidth
+        val bottomRow = Ui.horizontal(c, Gravity.BOTTOM)
+        bottomRow.addView(directionToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
+            leftMargin = Ui.u(firstMargin)
+        })
+        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
+            leftMargin = Ui.u(spacing)
+        })
+        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
+            leftMargin = Ui.u(spacing)
+        })
         bottomRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        bottomRow.addView(startButton, Ui.lp(Ui.u(232), Ui.u(86)))
-        root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 30))
+        bottomRow.addView(startButton, Ui.lp(Ui.u(238), Ui.u(73)))
+        root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 4))
 
-        // Bandeau bas : accès direct aux actions secondaires, comme sur la référence.
+        // Bandeau bas : accès direct aux actions secondaires.
         root.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
         val strip = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
         strip.addView(StripAction(c, Icon.Kind.BOLT, tr("Turbo"),
@@ -123,7 +134,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         strip.addView(divider(), LinearLayout.LayoutParams(Ui.u(1), Ui.u(46)))
         strip.addView(StripAction(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) },
             LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        root.addView(strip, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
+        root.addView(strip, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         refresh()
         return root

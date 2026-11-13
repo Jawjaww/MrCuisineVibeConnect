@@ -72,36 +72,43 @@ object Focusable {
 }
 
 /**
- * Pénombre calculée au pixel, une seule fois, puis mise en cache. Un profil gaussien donne une
- * décroissance continue : contrairement à des cercles empilés, aucune bande n'est visible, et
- * rien n'est recalculé par image.
+ * Ombre de contact, calculée au pixel et mise en cache.
+ *
+ * Une ombre centrée déborde aussi au-dessus de la forme, ce qui la fait flotter. Ici l'ellipse
+ * est centrée sous l'objet et l'alpha est nul au-dessus de sa ligne médiane : la pénombre ne
+ * existe que sur la zone basse, comme un objet posé sur le plan de travail.
  */
 object ShadowLayer {
     private val cache = HashMap<Long, Bitmap>()
 
-    fun circle(diameterPx: Int, spreadPx: Int, maxAlpha: Int, aspectY: Float = 0.72f): Bitmap {
+    fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
         require(diameterPx > 0)
-        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() +
-            (aspectY * 100).toLong() * 1_000_000_000L
+        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong()
         cache[key]?.let { return it }
         val side = diameterPx + 2 * spreadPx
         val pixels = IntArray(side * side)
         val r = diameterPx / 2f
         val c = side / 2f
-        val falloff = (spreadPx * 0.52f).coerceAtLeast(1f)
+        val ellipseY = r * 0.46f
+        val semiY = r * 0.46f
+        val semiX = r * 0.95f
+        val fade = (spreadPx * 1.6f).coerceAtLeast(1f)
         for (y in 0 until side) {
             val dy = y - c
+            // Rien au-dessus de la ligne médiane : l'ombre ne remonte jamais.
+            if (dy < r * 0.08f) continue
             for (x in 0 until side) {
                 val dx = x - c
-                // Aplatissement vertical : l'ombre s'étend davantage sous l'objet qu'au-dessus.
-                val d = sqrt(dx * dx + (dy / aspectY) * (dy / aspectY))
-                val a = if (d <= r) {
-                    maxAlpha
-                } else {
-                    val t = (d - r) / falloff
-                    (maxAlpha * exp(-(t * t))).toInt()
-                }
-                pixels[y * side + x] = a.coerceIn(0, 255) shl 24
+                val ex = dx / semiX
+                val ey = (dy - ellipseY) / semiY
+                val e = sqrt(ex * ex + ey * ey)
+                val t = if (e <= 0.55f) 0f else e - 0.55f
+                // Fondu de bord : la pénombre atteint zéro avant la limite du bitmap, sinon elle
+                // se coupe net et dessine un carré.
+                val border = minOf(x, side - 1 - x, y, side - 1 - y).toFloat()
+                val window = (border / fade).coerceIn(0f, 1f)
+                val a = (maxAlpha * exp(-(t * t) * 3.2f) * window).toInt()
+                if (a > 0) pixels[y * side + x] = a.coerceIn(0, 255) shl 24
             }
         }
         val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
@@ -146,7 +153,7 @@ class DiscBackground(
         val focused = state.contains(android.R.attr.state_focused)
         val selected = state.contains(android.R.attr.state_selected)
 
-        val shadow = ShadowLayer.circle(disc, spreadPx, alpha)
+        val shadow = ShadowLayer.contact(disc, spreadPx, alpha)
         canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(5f) - shadow.height / 2f, null)
 
         fill.color = when {
@@ -190,7 +197,7 @@ class RoundButton(
     context: Context,
     iconKind: Icon.Kind,
     label: String = "",
-    size: Int = 80,
+    size: Int = 67,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = if (size < 64) 5 else 9
@@ -201,7 +208,7 @@ class RoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 24 else 36), Ui.u(if (size < 64) 24 else 36), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 22 else 30), Ui.u(if (size < 64) 22 else 30), Gravity.CENTER))
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
         addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
@@ -233,7 +240,7 @@ class RoundButton(
  */
 class ToggleRoundButton(
     context: Context,
-    size: Int = 80,
+    size: Int = 67,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = 9
@@ -249,7 +256,7 @@ class ToggleRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(36), Ui.u(36), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(30), Ui.u(30), Gravity.CENTER))
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -300,8 +307,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 54) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 54) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -326,10 +333,10 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         }
         addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(54), Ui.u(54), r = 8))
-        actions.addView(plus, Ui.lp(Ui.u(54), Ui.u(54)))
+        actions.addView(minus, Ui.lp(Ui.u(55), Ui.u(55), r = 8))
+        actions.addView(plus, Ui.lp(Ui.u(55), Ui.u(55)))
         // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(54), t = -26))
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(55), t = -30))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
@@ -418,11 +425,12 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             if (size <= 0f) return
             val cx = width / 2f
             val cy = height / 2f
-            val radius = size * 0.42f
+            // Le disque occupe 87 % de la vue : le reste est la place de la pénombre.
+            val radius = size * 0.435f
             val arcRadius = radius - Ui.uf(3f)
 
             // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
-            val shadowBitmap = ShadowLayer.circle((2 * radius).toInt(), Ui.u(16), 66)
+            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(16), 64)
             canvas.drawBitmap(
                 shadowBitmap,
                 cx - shadowBitmap.width / 2f,
@@ -547,7 +555,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
 
     companion object {
         /** Diamètre du cadran, en unités de la grille 1024×600. */
-        const val SIZE = 232
+        const val SIZE = 258
 
         private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
     }
@@ -600,7 +608,7 @@ class HoldRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(36), Ui.u(36), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(30), Ui.u(30), Gravity.CENTER))
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -624,7 +632,7 @@ class HoldRoundButton(
             true
         }
         circle.setOnClickListener { /* Turbo est volontairement une action maintenue. */ }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(80 + 2 * spread), Ui.u(80 + 2 * spread)))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(67 + 2 * spread), Ui.u(67 + 2 * spread)))
         addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
         isFocusable = false
     }
@@ -676,15 +684,15 @@ class WeightBadge(context: Context) : LinearLayout(context) {
 
 /** Valeurs courantes (température mesurée, poids) réunies au-dessus du bouton principal. */
 class ReadoutCard(context: Context) : LinearLayout(context) {
-    private val temp = Ui.text(context, "—", T.Type.H3, T.TEXT, Ui.MEDIUM)
-    private val weight = Ui.text(context, "—", T.Type.H3, T.TEXT, Ui.MEDIUM)
+    private val temp = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
+    private val weight = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
     private val underline = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         background = Ui.round(T.BUTTON_FACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
-        setPadding(Ui.u(14), Ui.u(14), Ui.u(14), Ui.u(14))
+        setPadding(Ui.u(12), Ui.u(12), Ui.u(12), Ui.u(12))
         addView(row(Icon.Kind.THERMO, temp), Ui.lp(Ui.MATCH, Ui.WRAP))
         addView(View(context).apply { setBackgroundColor(T.STROKE) }, Ui.lp(Ui.MATCH, Ui.u(1), t = 8, b = 8))
         addView(row(Icon.Kind.SCALE, weight), Ui.lp(Ui.MATCH, Ui.WRAP))
@@ -693,7 +701,7 @@ class ReadoutCard(context: Context) : LinearLayout(context) {
 
     private fun row(icon: Icon.Kind, value: TextView): LinearLayout {
         val line = Ui.horizontal(context, Gravity.CENTER_VERTICAL)
-        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(26), Ui.u(26), r = 10))
+        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(22), Ui.u(22), r = 8))
         line.addView(value)
         return line
     }
@@ -724,7 +732,7 @@ class StripAction(
         orientation = VERTICAL
         gravity = Gravity.CENTER
         setPadding(Ui.u(8), Ui.u(6), Ui.u(8), Ui.u(6))
-        addView(icon, Ui.lp(Ui.u(38), Ui.u(38)))
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30)))
         addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
         isClickable = true
         isFocusable = true

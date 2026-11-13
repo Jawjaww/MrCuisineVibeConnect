@@ -74,7 +74,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 26) root.defaultFocusHighlightEnabled = false
         val column = Ui.vertical(this)
         topBar = TopBar(this)
-        column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(60)))
+        column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(70)))
         content = FrameLayout(this)
         column.addView(content, Ui.lp(Ui.MATCH, 0, 1f))
         machineBar = MachineBar(this)

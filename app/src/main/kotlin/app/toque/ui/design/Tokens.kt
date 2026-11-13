@@ -48,7 +48,7 @@ object T {
         const val SMALL = 16f
         const val MICRO = 15f
         const val CAPTION = 13f
-        const val DIAL_VALUE = 64f
+        const val DIAL_VALUE = 60f
         const val DIAL_UNIT = 22f
         const val DIAL_LEGEND = 15f
     }
