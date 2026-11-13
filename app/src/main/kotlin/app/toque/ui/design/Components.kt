@@ -191,7 +191,9 @@ class DiscBackground(
         val selected = state.contains(android.R.attr.state_selected)
 
         val shadow = if (cast) ShadowLayer.drop(disc, spreadPx, alpha) else ShadowLayer.contact(disc, spreadPx, alpha)
-        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(5f) - shadow.height / 2f, null)
+        // Aucun décalage au placement : le bitmap occupe exactement la vue, et le moindre
+        // décalage ferait rogner son bas par la limite de la vue — d'où la ligne franche.
+        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy - shadow.height / 2f, null)
 
         fill.color = when {
             selected -> T.BRAND
@@ -468,15 +470,17 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             val cx = width / 2f
             val cy = height / 2f
             // Le disque occupe 87 % de la vue : le reste est la place de la pénombre.
-            val radius = size * 0.435f
+            // Le disque laisse 15 % de la vue à la pénombre : assez pour qu'elle s'éteigne
+            // avant le bord de la vue, sinon elle est coupée net sur une ligne horizontale.
+            val radius = size * 0.425f
             val arcRadius = radius - Ui.uf(3f)
 
             // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
-            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(16), 64)
+            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(12), 64)
             canvas.drawBitmap(
                 shadowBitmap,
                 cx - shadowBitmap.width / 2f,
-                cy + Ui.uf(7f) - shadowBitmap.height / 2f,
+                cy + Ui.uf(4f) - shadowBitmap.height / 2f,
                 null,
             )
             // Couche figée : disque et graduations. Redessinée uniquement si la taille change.
