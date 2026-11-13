@@ -86,9 +86,12 @@ object ShadowLayer {
     fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
         build(diameterPx, spreadPx, maxAlpha, 0L, topFade = 0.02f, bottomFull = 0.30f)
 
-    /** Ombre portée : présente sur le pourtour, pour un élément posé sur un autre. */
+    /**
+     * Ombre portée : présente sur tout le pourtour, pour un élément posé **sur** un autre.
+     * C'est elle qui dessine sur le cadran le contour des boutons − / + qui le chevauchent.
+     */
     fun drop(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
-        build(diameterPx, spreadPx, maxAlpha, 1L, topFade = 0.55f, bottomFull = 0.70f)
+        build(diameterPx, spreadPx, maxAlpha, 1L, topFade = 0.98f, bottomFull = 1f)
 
     private fun build(
         diameterPx: Int,
@@ -217,7 +220,7 @@ class RoundButton(
     private val shadowAlpha: Int? = null,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val spread = if (size < 64) 5 else 9
+    private val spread = if (size < 64) 6 else 9
 
     /** Taille réellement occupée : le disque plus la place de sa pénombre. */
     val outerSize: Int = size + 2 * spread
@@ -327,8 +330,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 18) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 18) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 30) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 30) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
