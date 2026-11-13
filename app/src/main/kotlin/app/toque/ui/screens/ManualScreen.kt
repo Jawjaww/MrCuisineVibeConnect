@@ -65,15 +65,14 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         //   mini-cadrans 90 · cadrans ≤ 315 · débord des − / + · Démarrer 60
         // Les commandes se posent à cheval sur les flancs des cadrans, dans leur zone basse.
         val contentWidth = (Ui.widthUnits - 32f).toInt()
-        val button = 76
-        // 300 : le plus grand cadran qui laisse la place aux − / + puis à Démarrer.
-        dialSize = ((contentWidth - 40f) / 3f).toInt().coerceIn(150, 300)
-        // Gouttière fixe : les trois cadrans restent serrés. Le surplus de largeur va aux marges,
-        // pas entre eux — sinon ils se retrouvent écartés de 15 % de l'écran sur un grand écran.
-        val gap = 18
+        val button = 96
+        // 335 : le plus grand cadran qui laisse encore la place aux − / + puis à Démarrer.
+        dialSize = ((contentWidth - 40f) / 3f).toInt().coerceIn(150, 335)
+        // Gouttière minimale : les cadrans se touchent presque, le surplus va aux marges.
+        val gap = 6
         val used = 3 * dialSize + 2 * gap
         val left = ((contentWidth - used) / 2).coerceAtLeast(0)
-        val controlTop = 330
+        val controlTop = 346
 
         val dash = FrameLayout(c)
         dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
@@ -82,7 +81,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 90)
         dash.addView(weightMini, at(left, 0, 90, 90))
         tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 90)
-        dash.addView(tempMini, at(left + used - 90, 0, 90, 90))
+        dash.addView(tempMini, at(contentWidth - 90, 0, 90, 90))
 
         // --- Les trois grands cadrans.
         timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
@@ -122,7 +121,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
         // --- Démarrer, seul dans le coin bas-droit.
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        dash.addView(startButton, at(left + used - 238, 442, 238, 58))
+        dash.addView(startButton, at(contentWidth - 250, 492, 238, 64))
 
         // Message d'aide dans la bande haute, entre les deux mini-cadrans.
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
