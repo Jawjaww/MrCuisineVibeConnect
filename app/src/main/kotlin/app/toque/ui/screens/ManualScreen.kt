@@ -2,6 +2,7 @@ package app.toque.ui.screens
 
 import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.toque.core.i18n.tr
@@ -62,7 +63,10 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // La grille de référence est 1024×600, mais l'écran peut offrir plus de largeur
         // (2400×1080 donne 1333 unités). On répartit donc sur la largeur réellement disponible.
         val usable = Ui.widthUnits - 88f
-        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 350)
+        // Plafond : la barre machine (~76 unités) apparaît en bas pendant une cuisson et réduit
+        // d'autant la zone de contenu. Les cadrans sont bornés pour que rien ne soit rogné
+        // dans les deux états, avec ou sans barre.
+        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 300)
         val root = Ui.vertical(c)
         root.setPadding(Ui.u(71), Ui.u(14), Ui.u(22), Ui.u(10))
 
@@ -87,12 +91,6 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         topRow.addView(readout, Ui.lp(Ui.u(cardWidth()), Ui.u((cardWidth() * 0.95f).toInt()), t = 68, r = 10))
         root.addView(topRow, Ui.lp(Ui.MATCH, Ui.WRAP))
 
-        hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
-            gravity = Gravity.CENTER
-            setLineSpacing(0f, 1.05f)
-            visibility = View.GONE
-        }
-        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 6))
 
         // Rangée basse : commandes sous les cadrans, bouton principal sous la carte.
         directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
@@ -121,8 +119,22 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         bottomRow.addView(startButton, Ui.lp(Ui.u(238), Ui.u(73)))
         root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 4))
 
+        // Le message d'aide est superposé dans la bande libre entre les commandes et Démarrer :
+        // il ne pousse plus rien quand il apparaît, et la barre machine ne le rogne plus.
+        val frame = FrameLayout(c)
+        frame.addView(root, FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH))
+        hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
+            gravity = Gravity.CENTER
+            setLineSpacing(0f, 1.05f)
+            visibility = View.GONE
+        }
+        val free = (Ui.widthUnits - 22f - 238f - 24f - 406f - 22f).toInt().coerceAtLeast(200)
+        frame.addView(hint, FrameLayout.LayoutParams(Ui.u(minOf(free, 380)), Ui.WRAP, Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = Ui.u(238 + 24)
+            bottomMargin = Ui.u(6)
+        })
         refresh()
-        return root
+        return frame
     }
 
     /** La carte des valeurs occupe ~16 % de la largeur disponible, entre 160 et 240 unités. */
