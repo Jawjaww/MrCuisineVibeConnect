@@ -159,6 +159,13 @@ class Prefs(context: Context) {
             p.edit().putInt("knobPress", v).commit()
         }
 
+    /** Identifiant Android du périphérique physique ayant fourni les touches de la molette. */
+    var knobDeviceId: Int
+        get() = p.getInt("knobDeviceId", -1)
+        set(v) {
+            p.edit().putInt("knobDeviceId", v).commit()
+        }
+
     var lastCrashMs: Long
         get() = p.getLong("lastCrashMs", 0)
         set(v) {

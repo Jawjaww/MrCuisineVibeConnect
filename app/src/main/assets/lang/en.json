@@ -419,5 +419,7 @@
   "Consigne · %s": "Target · %s",
   "Mesurée : %d °C": "Measured: %d °C",
   "Mesure indisponible": "Measurement unavailable",
-  "Normal": "Normal"
+  "Normal": "Normal",
+  "Périphérique de la molette : %d": "Rotary device: %d",
+  "Périphérique de la molette : non calibré": "Rotary device: not calibrated"
 }

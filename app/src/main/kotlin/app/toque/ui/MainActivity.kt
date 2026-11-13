@@ -223,14 +223,20 @@ class MainActivity : Activity() {
             val mappedLeft = prefs.knobLeft >= 0
             val mappedRight = prefs.knobRight >= 0
             val mappedPress = prefs.knobPress >= 0
-            val fallbackDpad = !mappedLeft && !mappedRight && !mappedPress
-            // Un contrôle focalisé garde les flèches/Entrée pour la navigation D-pad.
-            // La molette reste prise en charge par dispatchGenericMotionEvent (AXIS_SCROLL).
+            val hasSavedMapping = mappedLeft || mappedRight || mappedPress
+            val mappedDeviceKnown = prefs.knobDeviceId >= 0
+            // Après calibration, les touches du périphérique physique sont séparées du D-pad TV
+            // grâce à deviceId. Les anciens réglages sans deviceId gardent leur comportement.
+            val isKnobDevice = mappedDeviceKnown && event.deviceId == prefs.knobDeviceId
+            val useSavedMapping = if (mappedDeviceKnown) isKnobDevice else hasSavedMapping
+            val fallbackDpad = !useSavedMapping
             val focusedControl = currentFocus != null && currentFocus !== root && currentFocus !== content
+            // Les flèches/Entrée du D-pad restent à Android quand un contrôle est focalisé.
             if (fallbackDpad && focusedControl) return super.dispatchKeyEvent(event)
-            val left = if (mappedLeft) prefs.knobLeft == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_LEFT
-            val right = if (mappedRight) prefs.knobRight == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_RIGHT
-            val press = if (mappedPress) prefs.knobPress == k else fallbackDpad &&
+            // L'encodeur à défilement reste pris en charge par dispatchGenericMotionEvent (AXIS_SCROLL).
+            val left = if (useSavedMapping && mappedLeft) prefs.knobLeft == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_LEFT
+            val right = if (useSavedMapping && mappedRight) prefs.knobRight == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_RIGHT
+            val press = if (useSavedMapping && mappedPress) prefs.knobPress == k else fallbackDpad &&
                 (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER)
             val s = current
             if (s != null && currentFocus !is android.widget.EditText) {

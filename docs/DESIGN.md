@@ -63,7 +63,7 @@ Le contrôle de sécurité continue d'utiliser `SafetyPolicy.checkJob`, `a.start
 
 Les vues interactives reçoivent un anneau de focus BRAND de 3 unités ; sur fond BRAND, le focus est ivoire. Sur API 26+, le focus highlight Android blanc est désactivé après vérification de version. Sur API 23, les anneaux personnalisés fonctionnent sans appeler l'API 26.
 
-Les flèches D-pad sont laissées au système quand un contrôle a le focus. Les codes de molette explicitement configurés continuent d'être consommés par le gestionnaire de molette ; les évènements AXIS_SCROLL restent pris en charge par `dispatchGenericMotionEvent`. Ce comportement doit être validé sur le robot : le matériel peut émettre des codes clavier plutôt que des évènements de molette.
+Les flèches D-pad sont laissées au système quand un contrôle a le focus. La calibration du bouton rotatif mémorise maintenant aussi le `deviceId` Android : les touches du périphérique physique sont traitées comme des commandes de molette, tandis que celles de la télécommande D-pad restent disponibles pour le focus TV. Les anciens réglages sans identifiant gardent leur comportement historique. Les évènements AXIS_SCROLL restent pris en charge par `dispatchGenericMotionEvent`. Recalibrer la molette dans Réglages après cette mise à jour pour enregistrer son identifiant.
 
 ## Budget graphique
 
