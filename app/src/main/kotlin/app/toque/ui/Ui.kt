@@ -18,6 +18,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import app.toque.ui.design.T
+import app.toque.ui.design.Focusable
+import app.toque.ui.design.Focusable
 
 /** Façade de compatibilité Ui : les écrans existants consomment les nouveaux tokens. */
 object Ui {
@@ -148,8 +150,15 @@ object Ui {
         val row = horizontal(c, Gravity.CENTER)
         row.minimumHeight = u(height)
         row.setPadding(u(22), 0, u(22), 0)
-        val base = if (style == Style.GHOST) round(Color.TRANSPARENT, height / 2f, STROKE_STRONG, 1.5f) else round(bg, height / 2f)
-        row.background = pressable(base, height / 2f)
+        val base = if (style == Style.GHOST) Color.TRANSPARENT else bg
+        Focusable.states(
+            row,
+            height / 2f,
+            normal = base,
+            pressed = if (style == Style.PRIMARY) T.BRAND_PRESSED else SURFACE3,
+            focusStroke = if (style == Style.PRIMARY) SURFACE else BRAND,
+        )
+        row.background = RippleDrawable(ColorStateList.valueOf(T.RIPPLE), row.background, round(SURFACE, height / 2f))
         if (icon != null) {
             row.addView(Icon(c, icon, fg), LinearLayout.LayoutParams(u(textSize * 1.3f), u(textSize * 1.3f)).apply {
                 if (label.isNotEmpty()) rightMargin = u(10)
@@ -183,7 +192,8 @@ object Ui {
     fun toggleChip(c: Context, label: String, selected: Boolean, onClick: () -> Unit): TextView {
         val t = text(c, label, 17f, if (selected) SURFACE else TEXT, MEDIUM)
         t.setPadding(u(18), u(10), u(18), u(10))
-        t.background = pressable(if (selected) round(BRAND, 40f) else round(SURFACE2, 40f, STROKE, 1f), 40f)
+        Focusable.states(t, 40f, normal = if (selected) BRAND else SURFACE2, pressed = SURFACE3, selected = BRAND)
+        t.isSelected = selected
         t.isClickable = true
         t.setOnClickListener { onClick() }
         return t

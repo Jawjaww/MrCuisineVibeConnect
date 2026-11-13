@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -66,7 +67,9 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BG))
 
         root = FrameLayout(this)
-        root.setBackgroundColor(Ui.BG)
+        root.background = app.toque.ui.design.Decor.background(this)
+        // API 26+ : le focus blanc natif est remplacé par nos anneaux explicites.
+        if (Build.VERSION.SDK_INT >= 26) root.isDefaultFocusHighlightEnabled = false
         val column = Ui.vertical(this)
         topBar = TopBar(this)
         column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(60)))
@@ -186,6 +189,10 @@ class MainActivity : Activity() {
         val v = s.view
         (v.parent as? FrameLayout)?.removeView(v)
         content.addView(v, Ui.flp())
+        // Le premier contrôle reçoit le focus initial ; les flèches restent ensuite au système Android.
+        v.post {
+            if (!v.hasFocus()) v.focusSearch(View.FOCUS_FORWARD)?.requestFocus()
+        }
         topBar.setTitle(s.title, stack.size > 1)
         s.onShow()
         s.onSnapshot(snapshot)
@@ -212,11 +219,18 @@ class MainActivity : Activity() {
         }
         if (event.action == KeyEvent.ACTION_DOWN && overlay.visibility != View.VISIBLE) {
             val k = event.keyCode
-            val left = prefs.knobLeft.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT }
-            val right = prefs.knobRight.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT }
-            val press = prefs.knobPress.let {
-                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
-            }
+            val mappedLeft = prefs.knobLeft >= 0
+            val mappedRight = prefs.knobRight >= 0
+            val mappedPress = prefs.knobPress >= 0
+            val fallbackDpad = !mappedLeft && !mappedRight && !mappedPress
+            // Un contrôle focalisé garde les flèches/Entrée pour la navigation D-pad.
+            // La molette reste prise en charge par dispatchGenericMotionEvent (AXIS_SCROLL).
+            val focusedControl = currentFocus != null && currentFocus !== root && currentFocus !== content
+            if (fallbackDpad && focusedControl) return super.dispatchKeyEvent(event)
+            val left = if (mappedLeft) prefs.knobLeft == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_LEFT
+            val right = if (mappedRight) prefs.knobRight == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_RIGHT
+            val press = if (mappedPress) prefs.knobPress == k else fallbackDpad &&
+                (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER)
             val s = current
             if (s != null && currentFocus !is android.widget.EditText) {
                 if (left && s.onKnob(-1)) return true

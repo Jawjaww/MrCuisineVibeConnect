@@ -122,7 +122,9 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
-        face.setOnFocusChangeListener { _, _ -> face.invalidate() }
+        face.setOnFocusChangeListener { _, focused -> if (focused) onSelect(); face.invalidate() }
+        minus.focusView().setOnFocusChangeListener { _, focused -> if (focused) onSelect() }
+        plus.focusView().setOnFocusChangeListener { _, focused -> if (focused) onSelect() }
         repeatOnHold(minus.focusView()) { if (repeatEnabled) onMinus() }
         repeatOnHold(plus.focusView()) { if (repeatEnabled) onPlus() }
     }
@@ -135,6 +137,8 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
         face.isSelected = selected
         face.invalidate()
     }
+
+    fun focusControl(): View = face
 
     private fun repeatOnHold(view: View, action: () -> Unit) {
         var count = 0

@@ -33,13 +33,6 @@ object Decor {
     }
 
     private fun compose(context: Context): Bitmap? {
-        val decoded = files.mapNotNull { name ->
-            try {
-                context.assets.open("decor/$name").use { BitmapFactory.decodeStream(it) }
-            } catch (_: Exception) { null }
-        }
-        if (decoded.isEmpty()) return null
-
         val output = Bitmap.createBitmap(1024, 600, Bitmap.Config.RGB_565)
         val canvas = Canvas(output)
         canvas.drawColor(T.BG)
@@ -49,11 +42,31 @@ object Decor {
             RectF(815f, -28f, 1052f, 184f),
             RectF(835f, 430f, 1048f, 620f),
         )
-        for (index in decoded.indices) {
-            val image = decoded[index]
-            canvas.drawBitmap(image, null, destinations[index.coerceAtMost(destinations.lastIndex)], paint)
-            image.recycle()
+        var drawn = false
+        for (index in files.indices) {
+            val image = try {
+                context.assets.open("decor/${files[index]}").use { stream ->
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeStream(stream, null, bounds)
+                    val sample = maxOf(1, maxOf(bounds.outWidth / 320, bounds.outHeight / 240))
+                    val options = BitmapFactory.Options().apply {
+                        inSampleSize = sample
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                    context.assets.open("decor/${files[index]}").use { BitmapFactory.decodeStream(it, null, options) }
+                }
+            } catch (_: Exception) { null }
+            if (image != null) {
+                canvas.drawBitmap(image, null, destinations[index], paint)
+                image.recycle()
+                drawn = true
+            }
+        }
+        if (!drawn) {
+            output.recycle()
+            return null
         }
         return output
     }
+}
 }

@@ -415,5 +415,8 @@
   "Étapes": "Steps",
   "Étapes %d à %d · %s": "Steps %d to %d · %s",
   "écriture impossible": "write failed",
-  "… et %d autres": "… and %d more"
+  "… et %d autres": "… and %d more",
+  "Consigne · %s": "Target · %s",
+  "Mesurée : %d °C": "Measured: %d °C",
+  "Mesure indisponible": "Measurement unavailable"
 }

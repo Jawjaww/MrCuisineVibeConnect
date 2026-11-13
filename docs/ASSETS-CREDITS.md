@@ -1,17 +1,7 @@
 # Crédits des images décoratives
 
-Date de vérification des licences : 13 novembre 2026.
+Aucune image photographique n'est actuellement intégrée à l'application. Le décor se replie donc sur le fond ivoire uni.
 
-Les images finales ne sont pas encore intégrées. Les trois sources ci-dessous
-ont été retenues comme candidates CC0 ; elles ne seront copiées dans
-`app/src/main/assets/decor/` qu'après recadrage et optimisation WebP (60 Ko maximum
-par fichier). L'application se replie actuellement sur un fond ivoire uni.
+Des pages Wikimedia Commons ont été identifiées comme pistes de recherche, mais leurs métadonnées de licence, auteurs et fichiers téléchargeables n'ont pas encore été vérifiés de manière suffisante pour autoriser leur redistribution dans le dépôt. Elles ne doivent pas être considérées comme des assets approuvés.
 
-| Fichier cible | Source Wikimedia Commons | Auteur | Licence |
-|---|---|---|---|
-| `basil.webp` | [Basil Plant.jpg](https://commons.wikimedia.org/wiki/File:Basil_Plant.jpg) | Maina Tudu | CC0 1.0 |
-| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 |
-| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 |
-
-Les fichiers optimisés devront être documentés ici avec leur nom final, leur source,
-leur auteur, leur licence et la date de téléchargement.
+Avant toute intégration, documenter pour chaque fichier final : nom, auteur, URL de la page de description, licence exacte, date de vérification et transformations effectuées. Le budget cible est de 60 Ko par image, 1400×900 maximum et 180 Ko au total.
