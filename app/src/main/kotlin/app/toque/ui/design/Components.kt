@@ -72,78 +72,54 @@ object Focusable {
 }
 
 /**
- * Ombre de contact, calculée au pixel et mise en cache.
+ * Pénombre calculée au pixel, une fois par taille, puis mise en cache.
  *
- * Une ombre centrée déborde aussi au-dessus de la forme, ce qui la fait flotter. Ici l'ellipse
- * est centrée sous l'objet et l'alpha est nul au-dessus de sa ligne médiane : la pénombre ne
- * existe que sur la zone basse, comme un objet posé sur le plan de travail.
+ * Elle est décrite **en coordonnées polaires autour du disque** : l'alpha ne dépend que de la
+ * distance au bord du cercle, et un masque vertical l'éteint au-dessus. Aucune fenêtre
+ * rectangulaire n'intervient, donc la pénombre épouse le contour et ne dessine jamais un carré ;
+ * elle s'annule d'elle-même avant la limite du bitmap.
  */
 object ShadowLayer {
     private val cache = HashMap<Long, Bitmap>()
 
-    /**
-     * Ombre portée classique, décalée vers le bas mais visible sur tout le pourtour : c'est elle
-     * qui marque qu'un bouton est **au-dessus** du cadran qu'il chevauche.
-     */
-    fun drop(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
-        require(diameterPx > 0)
-        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() or (1L shl 62)
-        cache[key]?.let { return it }
-        val side = diameterPx + 2 * spreadPx
-        val pixels = IntArray(side * side)
-        val r = diameterPx / 2f
-        val c = side / 2f
-        val offsetY = r * 0.16f
-        val semiX = r * 0.97f
-        val semiY = r * 0.92f
-        val fade = (spreadPx * 1.6f).coerceAtLeast(1f)
-        for (y in 0 until side) {
-            val dy = y - c
-            for (x in 0 until side) {
-                val dx = x - c
-                val ex = dx / semiX
-                val ey = (dy - offsetY) / semiY
-                val e = sqrt(ex * ex + ey * ey)
-                val t = if (e <= 0.72f) 0f else e - 0.72f
-                val border = minOf(x, side - 1 - x, y, side - 1 - y).toFloat()
-                val window = (border / fade).coerceIn(0f, 1f)
-                val a = (maxAlpha * exp(-(t * t) * 3.6f) * window).toInt()
-                if (a > 0) pixels[y * side + x] = a.coerceIn(0, 255) shl 24
-            }
-        }
-        val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, side, 0, 0, side, side)
-        cache[key] = bitmap
-        return bitmap
-    }
+    /** Ombre de contact : rien au-dessus de la ligne médiane, un liseré sous la forme. */
+    fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
+        build(diameterPx, spreadPx, maxAlpha, 0L, topFade = 0.02f, bottomFull = 0.30f)
 
-    fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
+    /** Ombre portée : présente sur le pourtour, pour un élément posé sur un autre. */
+    fun drop(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
+        build(diameterPx, spreadPx, maxAlpha, 1L, topFade = 0.55f, bottomFull = 0.70f)
+
+    private fun build(
+        diameterPx: Int,
+        spreadPx: Int,
+        maxAlpha: Int,
+        tag: Long,
+        topFade: Float,
+        bottomFull: Float,
+    ): Bitmap {
         require(diameterPx > 0)
-        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong()
+        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() or (tag shl 62)
         cache[key]?.let { return it }
         val side = diameterPx + 2 * spreadPx
         val pixels = IntArray(side * side)
         val r = diameterPx / 2f
         val c = side / 2f
-        val ellipseY = r * 0.46f
-        val semiY = r * 0.46f
-        val semiX = r * 0.95f
-        val fade = (spreadPx * 1.6f).coerceAtLeast(1f)
+        // Courte : la pénombre s'éteint à ~0,8 fois le débord, donc bien avant le bord du bitmap.
+        val falloff = (spreadPx * 0.40f).coerceAtLeast(0.8f)
+        val lowEdge = -r * topFade
+        val fullEdge = r * bottomFull
         for (y in 0 until side) {
             val dy = y - c
-            // Rien au-dessus de la ligne médiane : l'ombre ne remonte jamais.
-            if (dy < r * 0.08f) continue
+            val vertical = ((dy - lowEdge) / (fullEdge - lowEdge)).coerceIn(0f, 1f)
+            if (vertical <= 0f) continue
             for (x in 0 until side) {
                 val dx = x - c
-                val ex = dx / semiX
-                val ey = (dy - ellipseY) / semiY
-                val e = sqrt(ex * ex + ey * ey)
-                val t = if (e <= 0.55f) 0f else e - 0.55f
-                // Fondu de bord : la pénombre atteint zéro avant la limite du bitmap, sinon elle
-                // se coupe net et dessine un carré.
-                val border = minOf(x, side - 1 - x, y, side - 1 - y).toFloat()
-                val window = (border / fade).coerceIn(0f, 1f)
-                val a = (maxAlpha * exp(-(t * t) * 3.2f) * window).toInt()
+                val d = sqrt(dx * dx + dy * dy)
+                val out = ((d - r) / falloff).coerceAtLeast(0f)
+                val radial = exp(-(out * out))
+                if (radial < 0.02f) continue
+                val a = (maxAlpha * radial * vertical).toInt()
                 if (a > 0) pixels[y * side + x] = a.coerceIn(0, 255) shl 24
             }
         }
@@ -245,7 +221,7 @@ class RoundButton(
 
     /** Taille réellement occupée : le disque plus la place de sa pénombre. */
     val outerSize: Int = size + 2 * spread
-    private val circle = SoftCircle(context, spread = spread, alpha = shadowAlpha ?: if (size < 64) 46 else 58, cast = castShadow)
+    private val circle = SoftCircle(context, spread = spread, alpha = shadowAlpha ?: 32, cast = castShadow)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
@@ -351,8 +327,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 22) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 22) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 18) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 18) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -476,7 +452,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             val arcRadius = radius - Ui.uf(3f)
 
             // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
-            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(12), 64)
+            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(10), 46)
             canvas.drawBitmap(
                 shadowBitmap,
                 cx - shadowBitmap.width / 2f,
