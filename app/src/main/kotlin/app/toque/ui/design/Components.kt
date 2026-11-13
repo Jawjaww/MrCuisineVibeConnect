@@ -87,6 +87,7 @@ class RoundButton(
     }
 
     fun setButtonEnabled(enabled: Boolean) {
+        isEnabled = enabled
         circle.isEnabled = enabled
         alpha = if (enabled) 1f else 0.38f
     }
@@ -169,6 +170,9 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+        private val thinTypeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+        private val lightTypeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        private val mediumTypeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         private val bounds = RectF()
         private var value = "0"
         private var unit = ""
@@ -243,14 +247,14 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             }
 
             valuePaint.color = T.TEXT
-            valuePaint.typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+            valuePaint.typeface = thinTypeface
             valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE)
             val available = size * 0.66f
             while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(42f)) {
                 valuePaint.textSize -= Ui.uf(2f)
             }
             unitPaint.color = T.TEXT2
-            unitPaint.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            unitPaint.typeface = lightTypeface
             unitPaint.textSize = Ui.uf(T.Type.DIAL_UNIT)
             val valueWidth = valuePaint.measureText(value)
             val unitWidth = unitPaint.measureText(unit)
@@ -262,7 +266,7 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             if (unit.isNotEmpty()) canvas.drawText(unit, start + valueWidth + gap, baseline, unitPaint)
 
             legendPaint.color = T.TEXT2
-            legendPaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            legendPaint.typeface = mediumTypeface
             legendPaint.textSize = Ui.uf(T.Type.DIAL_LEGEND)
             val lineText = if (legend.length > 28) legend.take(27) + "…" else legend
             canvas.drawText(lineText, cx, cy + Ui.uf(52f), legendPaint)
@@ -323,7 +327,8 @@ class HoldRoundButton(
                     if (!held && isEnabled) {
                         held = true
                         view.isPressed = true
-                        icon.color = T.SURFACE
+                        circle.background = Ui.round(T.WARN, 36f, T.WARN, T.Line.HAIR)
+                        icon.color = T.TEXT
                         onDown()
                     }
                 }
@@ -332,6 +337,7 @@ class HoldRoundButton(
                         held = false
                         view.isPressed = false
                         icon.color = T.BRAND
+                        Focusable.states(circle, 36f, selected = T.BRAND)
                         onUp()
                     }
                 }

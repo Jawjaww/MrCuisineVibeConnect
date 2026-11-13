@@ -283,7 +283,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         val manualJob = s.kind?.name == "MANUAL" &&
             (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
         live = manualJob && s.state != JobState.PAUSED
-        timeDial.repeatEnabled = !live
+        timeDial.repeatEnabled = true
         tempDial.repeatEnabled = !live
         speedDial.repeatEnabled = !live
 

@@ -226,10 +226,7 @@ object Ui {
 
     /** Couleur de repli stable pour une vignette de recette sans photo. */
     fun placeholderColors(seed: String): IntArray {
-        val palette = intArrayOf(
-            0xFF3A2416.toInt(), 0xFF16302A.toInt(), 0xFF2B2140.toInt(), 0xFF3B1E26.toInt(),
-            0xFF1C2B3E.toInt(), 0xFF35301A.toInt(), 0xFF1E3320.toInt(), 0xFF3A2A1C.toInt(),
-        )
+        val palette = T.RECIPE_PLACEHOLDERS
         val i = Math.abs(seed.hashCode()) % palette.size
         val a = palette[i]
         val b = palette[(i + 3) % palette.size]

@@ -83,4 +83,4 @@ Le test d'internationalisation existant `I18nTest` reste la source de vérité p
 
 ## Limites de cette livraison
 
-Les fichiers photo finaux ne sont pas intégrés : les sources candidates et leurs licences doivent être vérifiées avant utilisation. Le rendu se replie donc sur l'ivoire uni. Les captures visuelles, le D-pad réel, le bouton rotatif, les mesures thermiques et la balance doivent être testés sur le robot et sur la TV.
+Les trois sources photographiques CC0 sont sélectionnées et documentées dans ASSETS-CREDITS.md. Les binaires WebP optimisés ne sont pas encore intégrés ; le rendu se replie donc sur l'ivoire uni. Les captures visuelles, le D-pad réel, le bouton rotatif, les mesures thermiques et la balance doivent être testés sur le robot et sur la TV.

@@ -30,6 +30,7 @@ import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
+import app.toque.ui.design.Decor
 import app.toque.ui.screens.HomeScreen
 import app.toque.ui.screens.SettingsScreen
 import java.text.SimpleDateFormat
@@ -67,7 +68,7 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BG))
 
         root = FrameLayout(this)
-        root.background = app.toque.ui.design.Decor.background(this)
+        root.background = Decor.background(this)
         // API 26+ : le focus blanc natif est remplacé par nos anneaux explicites.
         if (Build.VERSION.SDK_INT >= 26) root.isDefaultFocusHighlightEnabled = false
         val column = Ui.vertical(this)
@@ -191,7 +192,7 @@ class MainActivity : Activity() {
         content.addView(v, Ui.flp())
         // Le premier contrôle reçoit le focus initial ; les flèches restent ensuite au système Android.
         v.post {
-            if (!v.hasFocus()) v.focusSearch(View.FOCUS_FORWARD)?.requestFocus()
+            if (!v.hasFocus()) v.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
         }
         topBar.setTitle(s.title, stack.size > 1)
         s.onShow()

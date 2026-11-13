@@ -1,7 +1,13 @@
 # Crédits des images décoratives
 
-Aucune image photographique n'est actuellement intégrée à l'application. Le décor se replie donc sur le fond ivoire uni.
+Sources vérifiées le 13 novembre 2026. Les trois photographies sont publiées sous CC0 1.0 Universal Public Domain Dedication par leurs auteurs respectifs.
 
-Des pages Wikimedia Commons ont été identifiées comme pistes de recherche, mais leurs métadonnées de licence, auteurs et fichiers téléchargeables n'ont pas encore été vérifiés de manière suffisante pour autoriser leur redistribution dans le dépôt. Elles ne doivent pas être considérées comme des assets approuvés.
+| Fichier cible | Source | Auteur | Licence |
+|---|---|---|---|
+| `basil.webp` | [Sweet basil leaves.jpg](https://commons.wikimedia.org/wiki/File:Sweet_basil_leaves.jpg) | TheTechnician27 | CC0 1.0 |
+| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 |
+| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 |
 
-Avant toute intégration, documenter pour chaque fichier final : nom, auteur, URL de la page de description, licence exacte, date de vérification et transformations effectuées. Le budget cible est de 60 Ko par image, 1400×900 maximum et 180 Ko au total.
+Les fichiers binaires optimisés ne sont pas encore présents dans le dépôt. Les noms ci-dessus sont les noms cibles attendus par `Decor.kt`. Avant leur ajout, recadrer à la zone de composition, convertir en WebP qualité 80, limiter à 1400×900 et à 60 Ko par fichier (180 Ko cumulés maximum). Le décor se replie sur l'ivoire uni tant que ces fichiers sont absents.
+
+Les licences ont été vérifiées sur les pages de description Wikimedia Commons ; la provenance de chaque fichier optimisé devra rester associée à ce tableau.

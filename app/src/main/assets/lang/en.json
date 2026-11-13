@@ -418,5 +418,6 @@
   "… et %d autres": "… and %d more",
   "Consigne · %s": "Target · %s",
   "Mesurée : %d °C": "Measured: %d °C",
-  "Mesure indisponible": "Measurement unavailable"
+  "Mesure indisponible": "Measurement unavailable",
+  "Normal": "Normal"
 }
