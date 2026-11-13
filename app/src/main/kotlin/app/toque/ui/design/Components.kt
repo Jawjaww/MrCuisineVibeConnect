@@ -201,6 +201,9 @@ class RoundButton(
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = if (size < 64) 5 else 9
+
+    /** Taille réellement occupée : le disque plus la place de sa pénombre. */
+    val outerSize: Int = size + 2 * spread
     private val circle = SoftCircle(context, spread = spread, alpha = if (size < 64) 46 else 58)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
@@ -211,7 +214,7 @@ class RoundButton(
         circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 22 else 30), Ui.u(if (size < 64) 22 else 30), Gravity.CENTER))
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(outerSize), Ui.u(outerSize)))
         caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1)) }
         isFocusable = false
         isClickable = false
@@ -333,10 +336,10 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         }
         addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(55), Ui.u(55), r = 8))
-        actions.addView(plus, Ui.lp(Ui.u(55), Ui.u(55)))
+        actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
+        actions.addView(plus, Ui.lp(Ui.u(plus.outerSize), Ui.u(plus.outerSize)))
         // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(55), t = -30))
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = -30))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
