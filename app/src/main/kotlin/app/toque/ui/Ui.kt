@@ -171,6 +171,19 @@ object Ui {
         return row
     }
 
+    /** Anneau de focus et ripple pour les vues interactives historiques. */
+    fun focusable(
+        view: View,
+        radius: Float,
+        normal: Int = SURFACE,
+        pressed: Int = SURFACE3,
+        selected: Int? = null,
+        focusStroke: Int = BRAND,
+    ) {
+        Focusable.states(view, radius, normal, pressed, selected, focusStroke)
+        view.background = RippleDrawable(ColorStateList.valueOf(T.RIPPLE), view.background, round(SURFACE, radius))
+    }
+
     fun setButtonEnabled(b: View, enabled: Boolean) {
         b.isEnabled = enabled
         b.alpha = if (enabled) 1f else 0.35f

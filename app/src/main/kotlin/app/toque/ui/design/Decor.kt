@@ -48,7 +48,8 @@ object Decor {
                 context.assets.open("decor/${files[index]}").use { stream ->
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeStream(stream, null, bounds)
-                    val sample = maxOf(1, maxOf(bounds.outWidth / 320, bounds.outHeight / 240))
+                    var sample = 1
+                    while (bounds.outWidth / sample > 320 || bounds.outHeight / sample > 240) sample *= 2
                     val options = BitmapFactory.Options().apply {
                         inSampleSize = sample
                         inPreferredConfig = Bitmap.Config.RGB_565

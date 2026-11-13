@@ -10,7 +10,7 @@ object Palette {
     val STROKE_STRONG = 0xFF8A7C66.toInt()
     val TEXT = 0xFF252F2C.toInt()
     val TEXT2 = 0xFF566056.toInt()
-    val TEXT3 = 0xFF5E665C.toInt()
+    val TEXT3 = 0xFF5A6359.toInt()
     val BRAND = 0xFF37562E.toInt()
     val BRAND_PRESSED = 0xFF2C4525.toInt()
     val BOTANICAL = 0xFF7A962B.toInt()

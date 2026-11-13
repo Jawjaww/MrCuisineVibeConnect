@@ -59,7 +59,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         setPadding(Ui.u(10), 0, Ui.u(18), 0)
         setBackgroundColor(Ui.BG)
         back.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
-        back.background = Ui.pressable(Ui.round(0, 30f), 30f)
+        Ui.focusable(back, 30f, normal = Ui.BG, pressed = Ui.SURFACE3)
         back.setOnClickListener { a.back() }
         addView(back, LayoutParams(Ui.u(52), Ui.u(52)))
         addView(titleView, LayoutParams(0, Ui.WRAP, 1f).apply { leftMargin = Ui.u(6) })
@@ -68,7 +68,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         addView(link, Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
         addView(clock, Ui.lp(Ui.WRAP, Ui.WRAP, r = 6))
         home.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
-        home.background = Ui.pressable(Ui.round(0, 30f), 30f)
+        Ui.focusable(home, 30f, normal = Ui.BG, pressed = Ui.SURFACE3)
         home.setOnClickListener { a.home() }
         addView(home, LayoutParams(Ui.u(52), Ui.u(52)))
         lid.visibility = View.GONE

@@ -23,7 +23,7 @@ La palette de référence est définie dans `core/.../design/Palette.kt` et expo
 | STROKE_STRONG | #8A7C66 | bordure de champ |
 | TEXT | #252F2C | texte principal |
 | TEXT2 | #566056 | texte secondaire |
-| TEXT3 | #5E665C | mentions |
+| TEXT3 | #5A6359 | mentions |
 | BRAND | #37562E | action, sélection, focus |
 | BRAND_PRESSED | #2C4525 | appui |
 | BOTANICAL | #7A962B | décor / arcs uniquement |

@@ -21,6 +21,18 @@ class DesignTest {
         }
     }
 
+    @Test fun semanticStatusTextContrastIsAtLeastWcagAA() {
+        val pairs = listOf(
+            Palette.OK to Palette.BG,
+            Palette.WARN to Palette.WARN_WASH,
+            Palette.DANGER to Palette.DANGER_WASH,
+            Palette.COOL to Palette.BG,
+        )
+        for ((foreground, background) in pairs) {
+            assertTrue("Contraste d'état sémantique insuffisant", Palette.contrast(foreground, background) >= 4.5)
+        }
+    }
+
     @Test fun focusAndSelectionContrastIsAtLeastThreeToOne() {
         val focusPairs = listOf(
             Palette.BRAND to Palette.BG,
