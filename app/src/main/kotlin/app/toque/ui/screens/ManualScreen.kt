@@ -61,16 +61,13 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        // Quatre étages : mini-cadrans 140 en haut, cadrans, puis les commandes SUR LES FLANCS
-        // des cadrans mais nettement sous la ligne des − / +. Les ancrages passent par la gravité :
-        // la fenêtre réelle est plus étroite que l'écran quand il y a une encoche.
+        // La hauteur est le facteur limitant : 530 unités, dont 112 pour la rangée de commandes
+        // et 56 pour Démarrer. D'où 320 pour les cadrans, le maximum vérifié.
         val button = 96
         val gap = 6
-        // Plafonds mesurés : 365 par la hauteur (mini-cadrans + − / + + commandes),
-        // 421 par la largeur. On retient 300, le plus grand qui laisse Démarrer dans son angle.
-        dialSize = 300
+        dialSize = 320
         val groupWidth = 3 * dialSize + 2 * gap
-        val period = (groupWidth - button) / 3
+        val controlsTop = dialSize + 23 + 4
 
         val dash = FrameLayout(c)
         dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
@@ -86,24 +83,27 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             },
         )
 
-        // --- Grille des cadrans et des commandes, d'une seule pièce pour que les colonnes
-        // restent alignées : une commande dans chaque creux, sous la ligne des − / +.
-        val grid = FrameLayout(c)
+        // --- Les trois cadrans, centrés.
         timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED, size = dialSize)
         tempDial = Dial(c, Icon.Kind.THERMO, size = dialSize)
         val all = listOf(timeDial, speedDial, tempDial)
+        val group = FrameLayout(c)
         for ((index, dial) in all.withIndex()) {
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
-            grid.addView(
+            group.addView(
                 dial,
                 FrameLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
                     leftMargin = Ui.u(index * (dialSize + gap))
                 },
             )
         }
+        dash.addView(
+            group,
+            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
+        )
 
         directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
         directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
@@ -116,23 +116,31 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }, onUp = { a.machine.turboUp() })
         val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
 
-        val controlsTop = dialSize + 37 + 4
-        val controls = listOf(weigh, directionToggle, accessoryToggle, turbo)
-        for ((index, control) in controls.withIndex()) {
-            grid.addView(
+        // --- Peser et Turbo vont jusqu'aux bords de l'écran ; les deux bascules restent dans
+        // les creux entre les cadrans. Elles vivent toutes sous la ligne des − / +.
+        dash.addView(
+            weigh,
+            FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP).apply { topMargin = Ui.u(controlsTop) },
+        )
+        dash.addView(
+            turbo,
+            FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP, Gravity.TOP or Gravity.END).apply {
+                topMargin = Ui.u(controlsTop)
+            },
+        )
+        val middle = FrameLayout(c)
+        for ((index, control) in listOf(directionToggle, accessoryToggle).withIndex()) {
+            middle.addView(
                 control,
                 FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP).apply {
-                    leftMargin = Ui.u(index * period)
-                    topMargin = Ui.u(controlsTop)
+                    leftMargin = Ui.u(dialSize + gap / 2 - button / 2 + index * (dialSize + gap))
                 },
             )
         }
         dash.addView(
-            grid,
-            // Décalée à gauche : le bouton Démarrer occupe l'angle bas-droit et ne doit
-            // recouvrir aucune commande.
+            middle,
             FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                topMargin = Ui.u(0)
+                topMargin = Ui.u(controlsTop)
             },
         )
 
