@@ -89,7 +89,7 @@ class RoundButton(
     fun setButtonEnabled(enabled: Boolean) {
         isEnabled = enabled
         circle.isEnabled = enabled
-        alpha = if (enabled) 1f else 0.38f
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
     }
 
     fun focusView(): View = circle
@@ -210,8 +210,9 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             line.strokeWidth = Ui.uf(2.2f)
             line.color = T.SURFACE3
             canvas.drawArc(bounds, 135f, 270f, false, line)
-            line.strokeWidth = Ui.uf(5f)
-            line.color = T.BRAND
+            line.strokeWidth = Ui.uf(3.5f)
+            // Le vert botanique est réservé aux arcs et grandes icônes : il ne porte jamais de texte.
+            line.color = T.BOTANICAL
             if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, line)
 
             // 46 graduations sur l'arc actif de 270° (pas de 6°).
@@ -250,6 +251,8 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             valuePaint.typeface = thinTypeface
             valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE)
             val available = size * 0.66f
+            // Un tiret de consigne absente ne doit pas se lire comme un trait de règle.
+            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE * 0.62f)
             while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(42f)) {
                 valuePaint.textSize -= Ui.uf(2f)
             }
@@ -268,8 +271,35 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             legendPaint.color = T.TEXT2
             legendPaint.typeface = mediumTypeface
             legendPaint.textSize = Ui.uf(T.Type.DIAL_LEGEND)
-            val lineText = if (legend.length > 28) legend.take(27) + "…" else legend
-            canvas.drawText(lineText, cx, cy + Ui.uf(52f), legendPaint)
+            // Deux lignes au plus : la légende porte la nature de la consigne ET la mesure réelle,
+            // on ne veut pas perdre la valeur derrière une ellipse.
+            var legendY = cy + Ui.uf(50f)
+            for (lineText in wrapLegend(legend, size * 0.74f, legendPaint)) {
+                canvas.drawText(lineText, cx, legendY, legendPaint)
+                legendY += Ui.uf(17f)
+            }
+        }
+
+        private fun wrapLegend(text: String, maxWidth: Float, paint: Paint): List<String> {
+            if (paint.measureText(text) <= maxWidth) return listOf(text)
+            val separator = " · "
+            val cut = text.indexOf(separator)
+            if (cut > 0) {
+                return listOf(
+                    fit(text.substring(0, cut), maxWidth, paint),
+                    fit(text.substring(cut + separator.length), maxWidth, paint),
+                ).filter { it.isNotEmpty() }
+            }
+            return listOf(fit(text, maxWidth, paint))
+        }
+
+        private fun fit(text: String, maxWidth: Float, paint: Paint): String {
+            if (paint.measureText(text) <= maxWidth) return text
+            var shortened = text
+            while (shortened.length > 1 && paint.measureText(shortened + "…") > maxWidth) {
+                shortened = shortened.dropLast(1)
+            }
+            return shortened + "…"
         }
     }
 }
@@ -300,7 +330,7 @@ class PrimaryButton(
 
     fun setEnabledState(enabled: Boolean) {
         isEnabled = enabled
-        alpha = if (enabled) 1f else 0.42f
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
     }
 }
 
@@ -352,7 +382,7 @@ class HoldRoundButton(
 
     fun setButtonEnabled(enabled: Boolean) {
         circle.isEnabled = enabled
-        alpha = if (enabled) 1f else 0.38f
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
         if (!enabled && held) {
             held = false
             onUp()
@@ -379,6 +409,8 @@ class WeightBadge(context: Context) : LinearLayout(context) {
     fun set(weightG: Int, online: Boolean) {
         value.text = if (online) "$weightG g" else "—"
         status.text = if (online) tr("Balance") else tr("Base non connectée")
+        // La phrase d'origine est réutilisée comme description lue par les lecteurs d'écran.
+        contentDescription = if (online) tr("Balance : %d g", weightG) else tr("Base non connectée")
         value.setTextColor(if (online) T.TEXT else T.TEXT2)
         icon.color = if (online) T.BRAND else T.TEXT2
     }

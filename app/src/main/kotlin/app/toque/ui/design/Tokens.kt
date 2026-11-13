@@ -67,8 +67,11 @@ object T {
     object Line {
         const val HAIR = 1f
         const val SELECTED = 2f
-        const val FOCUS = 3f
+        const val FOCUS = 2.5f
     }
+
+    /** Un seul traitement du désactivé pour tout le système. */
+    const val DISABLED_ALPHA = 0.38f
 
     enum class TypefaceRole { DISPLAY, LIGHT, REGULAR, MEDIUM, BOLD }
 

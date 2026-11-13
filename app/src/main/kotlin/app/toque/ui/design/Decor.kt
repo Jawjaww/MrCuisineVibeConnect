@@ -10,26 +10,41 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.Gravity
+import android.view.View
+import java.util.concurrent.Executors
 
 /**
- * Pré-compose le décor une seule fois. Les photos optionnelles restent dans les marges à faible
- * opacité. En leur absence, le repli est un fond ivoire uni sans allocation bitmap.
+ * Pré-compose le décor une seule fois, hors du thread principal. Les photos restent dans les
+ * marges à faible opacité ; en leur absence le repli est un fond ivoire uni, sans allocation.
+ * Le robot (MT6580, 1 Go) ne doit pas payer ce coût au démarrage : l'ivoire s'affiche tout de
+ * suite et la composition remplace le fond quand elle est prête.
  */
 object Decor {
     private val files = listOf("basil.webp", "tomatoes.webp", "pepper.webp")
     @Volatile private var cached: Bitmap? = null
-    @Volatile private var attempted = false
+    @Volatile private var started = false
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "toque-decor").apply { priority = Thread.MIN_PRIORITY }
+    }
 
-    fun background(context: Context): Drawable {
-        val bitmap = cached ?: synchronized(this) {
-            if (!attempted) {
-                cached = compose(context.applicationContext)
-                attempted = true
+    /** Pose le fond immédiatement, puis le remplace si les photos finissent de composer. */
+    fun install(root: View) {
+        root.background = drawable(root.context)
+        if (cached != null || started) return
+        started = true
+        val app = root.context.applicationContext
+        worker.execute {
+            val bitmap = compose(app) ?: return@execute
+            cached = bitmap
+            root.post {
+                root.background = BitmapDrawable(root.resources, bitmap).apply { gravity = Gravity.FILL }
             }
-            cached
         }
-        return if (bitmap == null) ColorDrawable(T.BG)
-        else BitmapDrawable(context.resources, bitmap).apply { gravity = Gravity.FILL }
+    }
+
+    private fun drawable(context: Context): Drawable {
+        val bitmap = cached ?: return ColorDrawable(T.BG)
+        return BitmapDrawable(context.resources, bitmap).apply { gravity = Gravity.FILL }
     }
 
     private fun compose(context: Context): Bitmap? {
@@ -56,7 +71,9 @@ object Decor {
                     }
                     context.assets.open("decor/${files[index]}").use { BitmapFactory.decodeStream(it, null, options) }
                 }
-            } catch (_: Exception) { null }
+            } catch (_: Exception) {
+                null
+            }
             if (image != null) {
                 canvas.drawBitmap(image, null, destinations[index], paint)
                 image.recycle()

@@ -35,6 +35,7 @@ object Ui {
     val ACCENT_DIM = T.WASH_BRAND
     val BRAND = T.BRAND
     val BOTANICAL = T.BOTANICAL
+    val WASH_BRAND = T.WASH_BRAND
     val COOL = T.COOL
     val OK = T.OK
     val WARN = T.WARN
@@ -185,7 +186,7 @@ object Ui {
 
     fun setButtonEnabled(b: View, enabled: Boolean) {
         b.isEnabled = enabled
-        b.alpha = if (enabled) 1f else 0.35f
+        b.alpha = if (enabled) 1f else T.DISABLED_ALPHA
     }
 
     /** Pastille d'information (icône + texte). */
@@ -228,10 +229,9 @@ object Ui {
         else -> "${seconds / 60} min ${seconds % 60} s"
     }
 
-    /** Couleur liée à une température : froid -> bleu, tiède -> orange, chaud -> rouge. */
+    /** Trois bandes seulement : froid -> bleu, tiède -> ambre, chaud -> rouge. */
     fun tempColor(c: Int): Int = when {
         c >= 90 -> DANGER
-        c >= 60 -> WARN
         c >= 40 -> WARN
         else -> COOL
     }

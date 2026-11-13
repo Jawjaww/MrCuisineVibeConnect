@@ -68,9 +68,10 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BG))
 
         root = FrameLayout(this)
-        root.background = Decor.background(this)
+        // Décor : ivoire immédiat, photos composées hors thread principal puis appliquées.
+        Decor.install(root)
         // API 26+ : le focus blanc natif est remplacé par nos anneaux explicites.
-        if (Build.VERSION.SDK_INT >= 26) root.isDefaultFocusHighlightEnabled = false
+        if (Build.VERSION.SDK_INT >= 26) root.defaultFocusHighlightEnabled = false
         val column = Ui.vertical(this)
         topBar = TopBar(this)
         column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(60)))
@@ -220,24 +221,15 @@ class MainActivity : Activity() {
         }
         if (event.action == KeyEvent.ACTION_DOWN && overlay.visibility != View.VISIBLE) {
             val k = event.keyCode
-            val mappedLeft = prefs.knobLeft >= 0
-            val mappedRight = prefs.knobRight >= 0
-            val mappedPress = prefs.knobPress >= 0
-            val hasSavedMapping = mappedLeft || mappedRight || mappedPress
-            val mappedDeviceKnown = prefs.knobDeviceId >= 0
-            // Après calibration, les touches du périphérique physique sont séparées du D-pad TV
-            // grâce à deviceId. Les anciens réglages sans deviceId gardent leur comportement.
-            val isKnobDevice = mappedDeviceKnown && event.deviceId == prefs.knobDeviceId
-            val useSavedMapping = if (mappedDeviceKnown) isKnobDevice else hasSavedMapping
-            val fallbackDpad = !useSavedMapping
-            val focusedControl = currentFocus != null && currentFocus !== root && currentFocus !== content
-            // Les flèches/Entrée du D-pad restent à Android quand un contrôle est focalisé.
-            if (fallbackDpad && focusedControl) return super.dispatchKeyEvent(event)
-            // L'encodeur à défilement reste pris en charge par dispatchGenericMotionEvent (AXIS_SCROLL).
-            val left = if (useSavedMapping && mappedLeft) prefs.knobLeft == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_LEFT
-            val right = if (useSavedMapping && mappedRight) prefs.knobRight == k else fallbackDpad && k == KeyEvent.KEYCODE_DPAD_RIGHT
-            val press = if (useSavedMapping && mappedPress) prefs.knobPress == k else fallbackDpad &&
-                (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER)
+            // Une calibration enregistre le périphérique de la molette : les touches d'un autre
+            // périphérique (télécommande TV) restent au système pour la navigation au focus.
+            // Sans calibration, on garde le comportement historique : les écrans qui gèrent la
+            // molette la consomment, les autres laissent Android naviguer (chute dans super).
+            if (prefs.knobDeviceId >= 0 && event.deviceId != prefs.knobDeviceId) return super.dispatchKeyEvent(event)
+            val left = if (prefs.knobLeft >= 0) prefs.knobLeft == k else k == KeyEvent.KEYCODE_DPAD_LEFT
+            val right = if (prefs.knobRight >= 0) prefs.knobRight == k else k == KeyEvent.KEYCODE_DPAD_RIGHT
+            val press = if (prefs.knobPress >= 0) prefs.knobPress == k
+            else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
             val s = current
             if (s != null && currentFocus !is android.widget.EditText) {
                 if (left && s.onKnob(-1)) return true

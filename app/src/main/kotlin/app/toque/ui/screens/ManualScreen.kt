@@ -79,7 +79,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         left.addView(dials, LinearLayout.LayoutParams(Ui.MATCH, Ui.WRAP))
 
         val options = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
-        normalButton = RoundButton(c, Icon.Kind.SYNC, tr("Normal")) { setReverse(false) }
+        normalButton = RoundButton(c, Icon.Kind.SYNC, tr("Sens normal")) { setReverse(false) }
         reverseButton = RoundButton(c, Icon.Kind.REVERSE, tr("Inverse")) { setReverse(true) }
         bladeButton = RoundButton(c, Icon.Kind.BLADE, tr("Lame")) { setAccessory(Accessory.BLADE) }
         whiskButton = RoundButton(c, Icon.Kind.WHISK, tr("Fouet")) { setAccessory(Accessory.WHISK) }
@@ -93,6 +93,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
         options.addView(turbo, Ui.lp(Ui.u(88), Ui.u(104)))
+        // La maquette est pleine hauteur : le ressort se place AVANT les commandes pour les
+        // poser en bas, sur un écran de robot plus haut que large.
+        left.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
         left.addView(options, Ui.lp(Ui.MATCH, Ui.WRAP, t = 12))
 
         root.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { rightMargin = Ui.u(20) })
@@ -108,6 +111,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             setLineSpacing(0f, 1.05f)
         }
         right.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
+        right.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
         right.addView(startButton, Ui.lp(Ui.MATCH, Ui.u(68), t = 10))
         root.addView(right, LinearLayout.LayoutParams(Ui.u(276), Ui.MATCH))
@@ -220,27 +224,47 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }
     }
 
+    /**
+     * Vocabulaire d'origine du projet : il décrivait déjà la nature de la consigne
+     * (« Tiédir », « Cuisson », « Ébullition », « Sans chauffe »). On le réutilise au lieu
+     * de le remplacer, et on accole la mesure réelle.
+     */
+    private fun tempQuality(): String {
+        if (tempLevel == 0) return tr("Sans chauffe")
+        val t = Mcc.celsiusForLevel(tempLevel)
+        return when {
+            t >= 100 -> tr("Ébullition")
+            t >= 60 -> tr("Cuisson")
+            else -> tr("Tiédir")
+        }
+    }
+
+    private fun tempValue(): String = if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel).toString() else "—"
+
+    private fun tempLegend(): String {
+        val measured = if (hasSample) tr("Mesurée : %d °C", actualTemp) else tr("Mesure indisponible")
+        return tempQuality() + " · " + measured
+    }
+
+    private fun tempProgress(): Float =
+        if (tempLevel > 0) (Mcc.celsiusForLevel(tempLevel) / 130f).coerceIn(0f, 1f) else 0f
+
+    private fun measuredMarker(): Float? =
+        if (hasSample) (actualTemp / 130f).coerceIn(0f, 1f) else null
+
+    private fun speedLegend(): String = when (speed) {
+        1 -> tr("Mijoter")
+        2, 3 -> tr("Mélanger")
+        in 4..6 -> tr("Hacher")
+        else -> tr("Mixer")
+    } + if (reverse) " · " + tr("inverse") else ""
+
     private fun refresh() {
         val timeLegend = if (live) tr("restant") else if (speed > 6) "max 15 min" else "max 99 min"
         timeDial.set(Ui.clock(seconds * 1000L), "", timeLegend, (seconds / 5940f).coerceIn(0f, 1f))
 
-        val target = if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel) else 0
-        val measured = if (hasSample) tr("Mesurée : %d °C", actualTemp) else tr("Mesure indisponible")
-        tempDial.set(
-            if (target > 0) target.toString() else "—",
-            "°C",
-            if (target > 0) tr("Consigne · %s", measured) else measured,
-            if (target > 0) (target / 130f).coerceIn(0f, 1f) else 0f,
-            if (hasSample) (actualTemp / 130f).coerceIn(0f, 1f) else null,
-        )
-
-        val speedLegend = when (speed) {
-            1 -> tr("Mijoter")
-            2, 3 -> tr("Mélanger")
-            in 4..6 -> tr("Hacher")
-            else -> tr("Mixer")
-        } + if (reverse) " · " + tr("inverse") else ""
-        speedDial.set(speed.toString(), "", speedLegend, speed / 10f,
+        tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
+        speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (a.snapshot.speedLevel > 0) (a.snapshot.speedLevel / 10f).coerceIn(0f, 1f) else null)
 
         timeDial.select(selected == 0)
@@ -263,20 +287,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     override fun onSnapshot(s: Snapshot) {
         hasSample = s.hasSample
         actualTemp = if (s.hasSample) s.actualTempC else 0
-        tempDial.set(
-            if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel).toString() else "—",
-            "°C",
-            if (s.hasSample) tr("Mesurée : %d °C", s.actualTempC) else tr("Mesure indisponible"),
-            if (tempLevel > 0) (Mcc.celsiusForLevel(tempLevel) / 130f).coerceIn(0f, 1f) else 0f,
-            if (s.hasSample) (s.actualTempC / 130f).coerceIn(0f, 1f) else null,
-        )
-        val speedLegend = when (speed) {
-            1 -> tr("Mijoter")
-            2, 3 -> tr("Mélanger")
-            in 4..6 -> tr("Hacher")
-            else -> tr("Mixer")
-        } + if (reverse) " · " + tr("inverse") else ""
-        speedDial.set(speed.toString(), "", speedLegend, speed / 10f,
+        tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
+        speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (s.speedLevel > 0) (s.speedLevel / 10f).coerceIn(0f, 1f) else null)
         weightBadge.set(s.weightG, s.hasSample)
 
