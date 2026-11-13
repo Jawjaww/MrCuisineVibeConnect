@@ -1,10 +1,15 @@
 package app.toque.ui.design
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.view.Gravity
 import android.view.MotionEvent
@@ -43,6 +48,45 @@ object Focusable {
         view.background = drawable
         view.isFocusable = true
     }
+
+    /** Dégradé à trois états : repos, appui, focus. Aucune animation, aucun flou. */
+    fun gradientButton(view: View, radius: Float, top: Int, bottom: Int, pressedTop: Int, pressedBottom: Int) {
+        fun layer(from: Int, to: Int, stroke: Int?): GradientDrawable =
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(from, to)).apply {
+                cornerRadius = Ui.uf(radius)
+                if (stroke != null) setStroke(Ui.u(T.Line.FOCUS), stroke)
+            }
+        val drawable = StateListDrawable()
+        drawable.addState(intArrayOf(android.R.attr.state_focused), layer(top, bottom, T.SURFACE))
+        drawable.addState(intArrayOf(android.R.attr.state_pressed), layer(pressedTop, pressedBottom, null))
+        drawable.addState(intArrayOf(), layer(top, bottom, null))
+        view.background = drawable
+        view.isFocusable = true
+    }
+}
+
+/**
+ * Disque avec ombre douce. L'ombre est un dégradé radial dessiné avant le fond : aucun
+ * `setShadowLayer`, aucun flou, coût constant même sur le MT6580 du robot.
+ */
+class SoftCircle(context: Context, private val shadowAlpha: Int = 32) : FrameLayout(context) {
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun draw(canvas: Canvas) {
+        val radius = minOf(width, height) / 2f
+        if (radius > 0f) {
+            val blur = Ui.uf(9f)
+            val cy = height / 2f + Ui.uf(2.5f)
+            shadowPaint.shader = RadialGradient(
+                width / 2f, cy, radius + blur,
+                intArrayOf(Color.argb(shadowAlpha, 0, 0, 0), Color.TRANSPARENT),
+                floatArrayOf(radius / (radius + blur), 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(width / 2f, cy, radius + blur, shadowPaint)
+        }
+        super.draw(canvas)
+    }
 }
 
 /** Surface claire réutilisable, sans élévation ni ombre dynamique. */
@@ -59,22 +103,22 @@ class RoundButton(
     context: Context,
     iconKind: Icon.Kind,
     label: String = "",
-    size: Int = 72,
+    size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = FrameLayout(context)
+    private val circle = SoftCircle(context)
     private val icon = Icon(context, iconKind, T.TEXT)
-    private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.MICRO, T.TEXT2) else null
+    private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT2) else null
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 22 else 28), Ui.u(if (size < 64) 22 else 28), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 20 else 26), Ui.u(if (size < 60) 20 else 26), Gravity.CENTER))
         Focusable.states(circle, size / 2f, selected = T.BRAND)
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
         addView(circle, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
-        caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4)) }
+        caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5)) }
         isFocusable = false
         isClickable = false
         contentDescription = label
@@ -95,11 +139,81 @@ class RoundButton(
     fun focusView(): View = circle
 }
 
-/** Dial natif léger : un View Canvas dessine cadran, graduations, arc et repère de mesure. */
-class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
+/**
+ * Bascule unique : le libellé et l'icône décrivent **l'état courant**, un appui passe à l'autre.
+ * Remplace la paire de boutons qui affichait les deux choix à la fois.
+ */
+class ToggleRoundButton(
+    context: Context,
+    size: Int = 62,
+    private val action: () -> Unit = {},
+) : LinearLayout(context) {
+    private val circle = SoftCircle(context)
+    private val icon = Icon(context, Icon.Kind.SYNC, T.TEXT)
+    private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT2, Ui.MEDIUM)
+    private var on = false
+    private var onKind = Icon.Kind.SYNC
+    private var offKind = Icon.Kind.REVERSE
+    private var onLabel = ""
+    private var offLabel = ""
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
+        Focusable.states(circle, size / 2f, selected = T.BRAND)
+        circle.setOnClickListener {
+            if (isEnabled) {
+                on = !on
+                action()
+                apply()
+            }
+        }
+        addView(circle, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5))
+        isFocusable = false
+        isClickable = false
+    }
+
+    /** Libellés et icônes des deux états ; `on` désigne l'état alternatif. */
+    fun configure(onLabel: String, onKind: Icon.Kind, offLabel: String, offKind: Icon.Kind) {
+        this.onLabel = onLabel
+        this.onKind = onKind
+        this.offLabel = offLabel
+        this.offKind = offKind
+        apply()
+    }
+
+    /** Aligne l'affichage sur l'état réel du modèle (sans déclencher l'action). */
+    fun set(active: Boolean) {
+        if (on == active) return
+        on = active
+        apply()
+    }
+
+    fun setButtonEnabled(enabled: Boolean) {
+        isEnabled = enabled
+        circle.isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+
+    fun focusView(): View = circle
+
+    private fun apply() {
+        icon.set(if (on) onKind else offKind)
+        caption.text = if (on) onLabel else offLabel
+        circle.isSelected = on
+        icon.color = if (on) T.SURFACE else T.TEXT
+        caption.setTextColor(if (on) T.BRAND else T.TEXT2)
+        circle.contentDescription = caption.text
+    }
+}
+
+/** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
+class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 56) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 56) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 54) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 54) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -109,17 +223,25 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        val faceBox = FrameLayout(context)
-        faceBox.addView(face, Ui.flp(Ui.u(216), Ui.u(216)))
-        faceBox.addView(
-            Icon(context, iconKind, T.TEXT2),
-            Ui.flp(Ui.u(26), Ui.u(26), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(29) },
+        face.hasBottomIcon = bottomIcon != null
+        val box = FrameLayout(context)
+        box.addView(face, Ui.flp(Ui.u(SIZE), Ui.u(SIZE)))
+        box.addView(
+            Icon(context, topIcon, T.TEXT),
+            Ui.flp(Ui.u(26), Ui.u(26), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(36) },
         )
-        addView(faceBox, LinearLayout.LayoutParams(Ui.u(216), Ui.u(216)))
+        if (bottomIcon != null) {
+            box.addView(
+                Icon(context, bottomIcon, T.TEXT),
+                Ui.flp(Ui.u(26), Ui.u(26), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(38) },
+            )
+        }
+        addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(56), Ui.u(56), r = 10))
-        actions.addView(plus, Ui.lp(Ui.u(56), Ui.u(56)))
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(56), t = 4))
+        actions.addView(minus, Ui.lp(Ui.u(54), Ui.u(54), r = 10))
+        actions.addView(plus, Ui.lp(Ui.u(54), Ui.u(54)))
+        // Les boutons chevauchent le bas du disque, comme sur la maquette.
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(54), t = -14))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
@@ -165,20 +287,25 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
     }
 
     private class DialFace(context: Context) : View(context) {
-        private val circle = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        var hasBottomIcon = false
+
+        private val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-        private val thinTypeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
-        private val lightTypeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
         private val mediumTypeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        private val regularTypeface = Typeface.create("sans-serif", Typeface.NORMAL)
         private val bounds = RectF()
         private var value = "0"
         private var unit = ""
         private var legend = ""
         private var progress = 0f
         private var marker: Float? = null
+        private var staticLayer: Bitmap? = null
+        private var layerSize = 0
 
         fun update(value: String, unit: String, legend: String, progress: Float, marker: Float?) {
             if (this.value == value && this.unit == unit && this.legend == legend &&
@@ -191,92 +318,126 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             invalidate()
         }
 
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            staticLayer?.recycle()
+            staticLayer = null
+            layerSize = w
+        }
+
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val size = minOf(width, height).toFloat()
             if (size <= 0f) return
             val cx = width / 2f
             val cy = height / 2f
-            val radius = size * 0.455f
-            circle.color = T.SURFACE
-            circle.style = Paint.Style.FILL
-            canvas.drawCircle(cx, cy, radius, circle)
+            val radius = size * 0.42f
+            val arcRadius = radius - Ui.uf(3f)
 
-            line.strokeWidth = Ui.uf(if (isFocused) T.Line.FOCUS else if (isSelected) T.Line.SELECTED else T.Line.HAIR)
-            line.color = if (isFocused || isSelected) T.BRAND else T.STROKE
-            bounds.set(cx - radius, cy - radius, cx + radius, cy + radius)
-            canvas.drawArc(bounds, 135f, 270f, false, line)
+            // Couche figée : ombre, disque, graduations. Redessinée uniquement si la taille change.
+            val layer = staticLayer ?: buildLayer(size, cx, cy, radius, arcRadius).also { staticLayer = it }
+            canvas.drawBitmap(layer, 0f, 0f, null)
 
-            line.strokeWidth = Ui.uf(2.2f)
-            line.color = T.SURFACE3
-            canvas.drawArc(bounds, 135f, 270f, false, line)
-            line.strokeWidth = Ui.uf(3.5f)
-            // Le vert botanique est réservé aux arcs et grandes icônes : il ne porte jamais de texte.
-            line.color = T.BOTANICAL
-            if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, line)
-
-            // 46 graduations sur l'arc actif de 270° (pas de 6°).
-            line.strokeWidth = Ui.uf(1.5f)
-            line.color = T.TEXT3
-            for (i in 0..45) {
-                val angle = Math.toRadians((135 + i * 6).toDouble())
-                val major = i % 5 == 0
-                val inner = radius - Ui.uf(if (major) 13f else 8f)
-                val outer = radius - Ui.uf(2f)
-                canvas.drawLine(
-                    cx + (inner * Math.cos(angle)).toFloat(),
-                    cy + (inner * Math.sin(angle)).toFloat(),
-                    cx + (outer * Math.cos(angle)).toFloat(),
-                    cy + (outer * Math.sin(angle)).toFloat(),
-                    line,
-                )
+            arcPaint.strokeWidth = Ui.uf(if (isFocused || isSelected) T.Line.FOCUS else T.Line.HAIR)
+            arcPaint.color = when {
+                isFocused -> T.BRAND
+                isSelected -> T.BOTANICAL
+                else -> T.STROKE
             }
+            if (isFocused) arcPaint.strokeWidth = Ui.uf(2f)
+            val edge = radius + Ui.uf(2f)
+            bounds.set(cx - edge, cy - edge, cx + edge, cy + edge)
+            canvas.drawArc(bounds, 135f, 270f, false, arcPaint)
+
+            bounds.set(cx - arcRadius, cy - arcRadius, cx + arcRadius, cy + arcRadius)
+            arcPaint.strokeWidth = Ui.uf(6f)
+            arcPaint.color = T.ARC_TRACK
+            canvas.drawArc(bounds, 135f, 270f, false, arcPaint)
+            arcPaint.color = T.BOTANICAL
+            if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, arcPaint)
 
             marker?.let { fraction ->
                 val angle = Math.toRadians((135 + 270 * fraction).toDouble())
-                line.strokeWidth = Ui.uf(2f)
-                line.color = T.TEXT
-                val inner = radius - Ui.uf(18f)
-                val outer = radius + Ui.uf(2f)
+                arcPaint.strokeWidth = Ui.uf(2f)
+                arcPaint.color = T.TEXT
+                val inner = radius - Ui.uf(20f)
+                val outer = radius - Ui.uf(4f)
                 canvas.drawLine(
                     cx + (inner * Math.cos(angle)).toFloat(),
                     cy + (inner * Math.sin(angle)).toFloat(),
                     cx + (outer * Math.cos(angle)).toFloat(),
                     cy + (outer * Math.sin(angle)).toFloat(),
-                    line,
+                    arcPaint,
                 )
             }
 
+            drawValue(canvas, cx, cy, size)
+            drawLegend(canvas, cx, cy, size)
+        }
+
+        private fun buildLayer(size: Float, cx: Float, cy: Float, radius: Float, arcRadius: Float): Bitmap {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val blur = Ui.uf(12f)
+            shadowPaint.shader = RadialGradient(
+                cx, cy + Ui.uf(4f), radius + blur,
+                intArrayOf(Color.argb(30, 0, 0, 0), Color.TRANSPARENT),
+                floatArrayOf(radius / (radius + blur), 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy + Ui.uf(4f), radius + blur, shadowPaint)
+            discPaint.color = T.SURFACE
+            discPaint.style = Paint.Style.FILL
+            canvas.drawCircle(cx, cy, radius, discPaint)
+
+            tickPaint.strokeWidth = Ui.uf(1.4f)
+            tickPaint.color = T.TICK
+            for (i in 0..44) {
+                val angle = Math.toRadians((135 + i * 6).toDouble())
+                val inner = arcRadius - Ui.uf(if (i % 5 == 0) 20f else 13f)
+                val outer = arcRadius - Ui.uf(7f)
+                canvas.drawLine(
+                    cx + (inner * Math.cos(angle)).toFloat(),
+                    cy + (inner * Math.sin(angle)).toFloat(),
+                    cx + (outer * Math.cos(angle)).toFloat(),
+                    cy + (outer * Math.sin(angle)).toFloat(),
+                    tickPaint,
+                )
+            }
+            return bitmap
+        }
+
+        private fun drawValue(canvas: Canvas, cx: Float, cy: Float, size: Float) {
             valuePaint.color = T.TEXT
-            valuePaint.typeface = thinTypeface
+            valuePaint.typeface = mediumTypeface
             valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE)
-            val available = size * 0.66f
-            // Un tiret de consigne absente ne doit pas se lire comme un trait de règle.
-            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE * 0.62f)
-            while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(42f)) {
+            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE * 0.7f)
+            val available = size * 0.62f
+            while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(36f)) {
                 valuePaint.textSize -= Ui.uf(2f)
             }
             unitPaint.color = T.TEXT2
-            unitPaint.typeface = lightTypeface
+            unitPaint.typeface = regularTypeface
             unitPaint.textSize = Ui.uf(T.Type.DIAL_UNIT)
             val valueWidth = valuePaint.measureText(value)
             val unitWidth = unitPaint.measureText(unit)
-            val gap = if (unit.isEmpty()) 0f else Ui.uf(6f)
-            val total = valueWidth + gap + unitWidth
-            val start = cx - total / 2f
-            val baseline = cy + Ui.uf(20f)
+            val gap = if (unit.isEmpty()) 0f else Ui.uf(5f)
+            val start = cx - (valueWidth + gap + unitWidth) / 2f
+            val baseline = cy + Ui.uf(14f)
             canvas.drawText(value, start, baseline, valuePaint)
             if (unit.isNotEmpty()) canvas.drawText(unit, start + valueWidth + gap, baseline, unitPaint)
+        }
 
+        private fun drawLegend(canvas: Canvas, cx: Float, cy: Float, size: Float) {
+            if (legend.isEmpty()) return
             legendPaint.color = T.TEXT2
             legendPaint.typeface = mediumTypeface
             legendPaint.textSize = Ui.uf(T.Type.DIAL_LEGEND)
-            // Deux lignes au plus : la légende porte la nature de la consigne ET la mesure réelle,
-            // on ne veut pas perdre la valeur derrière une ellipse.
-            var legendY = cy + Ui.uf(50f)
-            for (lineText in wrapLegend(legend, size * 0.74f, legendPaint)) {
-                canvas.drawText(lineText, cx, legendY, legendPaint)
-                legendY += Ui.uf(17f)
+            val maxWidth = size * 0.66f
+            val lines = if (hasBottomIcon) listOf(fit(legend, maxWidth, legendPaint)) else wrapLegend(legend, maxWidth, legendPaint)
+            var y = cy + Ui.uf(if (hasBottomIcon) 42f else 46f)
+            for (lineText in lines) {
+                canvas.drawText(lineText, cx, y, legendPaint)
+                y += Ui.uf(17f)
             }
         }
 
@@ -302,9 +463,14 @@ class Dial(context: Context, iconKind: Icon.Kind) : LinearLayout(context) {
             return shortened + "…"
         }
     }
+
+    companion object {
+        /** Diamètre du cadran, en unités de la grille 1024×600. */
+        const val SIZE = 248
+    }
 }
 
-/** Contrôle principal tactile, à forte hiérarchie et avec focus explicite. */
+/** Contrôle principal tactile : dégradé statique, libellé large, focus explicite. */
 class PrimaryButton(
     context: Context,
     label: String,
@@ -317,11 +483,12 @@ class PrimaryButton(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
         setPadding(Ui.u(T.Space.S24), 0, Ui.u(T.Space.S24), 0)
-        minimumHeight = Ui.u(68)
-        icon.color = T.SURFACE
-        addView(icon, Ui.lp(Ui.u(26), Ui.u(26), r = 10))
+        minimumHeight = Ui.u(86)
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30), r = 12))
         addView(title)
-        Focusable.states(this, T.Radius.PILL, T.BRAND, T.BRAND_PRESSED, focusStroke = T.SURFACE)
+        Focusable.gradientButton(
+            this, T.Radius.PILL, T.START_TOP, T.START_BOTTOM, T.START_TOP_PRESSED, T.START_BOTTOM_PRESSED,
+        )
         isClickable = true
         setOnClickListener { if (isEnabled) action() }
     }
@@ -341,23 +508,23 @@ class HoldRoundButton(
     private val onDown: () -> Unit,
     private val onUp: () -> Unit,
 ) : LinearLayout(context) {
-    private val circle = FrameLayout(context)
+    private val circle = SoftCircle(context)
     private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
-    private val caption = Ui.text(context, label, T.Type.MICRO, T.TEXT2, Ui.MEDIUM)
+    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT2, Ui.MEDIUM)
     private var held = false
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(28), Ui.u(28), Gravity.CENTER))
-        Focusable.states(circle, 36f, selected = T.BRAND)
+        circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
+        Focusable.states(circle, 31f, selected = T.BRAND)
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     if (!held && isEnabled) {
                         held = true
                         view.isPressed = true
-                        circle.background = Ui.round(T.WARN, 36f, T.WARN, T.Line.HAIR)
+                        circle.background = Ui.round(T.WARN, 31f, T.WARN, T.Line.HAIR)
                         icon.color = T.TEXT
                         onDown()
                     }
@@ -367,7 +534,7 @@ class HoldRoundButton(
                         held = false
                         view.isPressed = false
                         icon.color = T.BRAND
-                        Focusable.states(circle, 36f, selected = T.BRAND)
+                        Focusable.states(circle, 31f, selected = T.BRAND)
                         onUp()
                     }
                 }
@@ -375,8 +542,8 @@ class HoldRoundButton(
             true
         }
         circle.setOnClickListener { /* Turbo est volontairement une action maintenue. */ }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(72), Ui.u(72)))
-        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(62), Ui.u(62)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5))
         isFocusable = false
     }
 
@@ -393,26 +560,35 @@ class HoldRoundButton(
 /** Balance actuelle, indépendante des commandes de cuisson. */
 class WeightBadge(context: Context) : LinearLayout(context) {
     private val icon = Icon(context, Icon.Kind.SCALE, T.TEXT2)
-    private val value = Ui.text(context, "—", T.Type.H1, T.TEXT, Ui.LIGHT)
+    private val value = Ui.text(context, "—", T.Type.H1, T.TEXT, Ui.MEDIUM)
+    private val unit = Ui.text(context, "g", T.Type.SMALL, T.TEXT2, Ui.REGULAR)
     private val status = Ui.text(context, tr("Base non connectée"), T.Type.CAPTION, T.TEXT2)
+    private val underline = View(context)
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER
         background = Ui.round(T.SURFACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
-        setPadding(Ui.u(12), Ui.u(10), Ui.u(12), Ui.u(10))
-        addView(icon, Ui.lp(Ui.u(28), Ui.u(28), b = 2))
-        addView(value)
-        addView(status, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+        setPadding(Ui.u(12), Ui.u(12), Ui.u(12), Ui.u(12))
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30)))
+        val row = Ui.horizontal(context, Gravity.CENTER)
+        row.addView(value)
+        row.addView(unit, Ui.lp(Ui.WRAP, Ui.WRAP, l = 4, b = 6))
+        addView(row, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+        underline.setBackgroundColor(T.BOTANICAL)
+        addView(underline, Ui.lp(Ui.u(72), Ui.u(3), t = 4))
+        addView(status, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
     }
 
     fun set(weightG: Int, online: Boolean) {
-        value.text = if (online) "$weightG g" else "—"
+        value.text = if (online) "$weightG" else "—"
+        unit.text = if (online) "g" else ""
         status.text = if (online) tr("Balance") else tr("Base non connectée")
         // La phrase d'origine est réutilisée comme description lue par les lecteurs d'écran.
         contentDescription = if (online) tr("Balance : %d g", weightG) else tr("Base non connectée")
         value.setTextColor(if (online) T.TEXT else T.TEXT2)
         icon.color = if (online) T.BRAND else T.TEXT2
+        underline.visibility = if (online) View.VISIBLE else View.INVISIBLE
     }
 }
 

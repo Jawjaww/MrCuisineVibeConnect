@@ -47,6 +47,22 @@ class DesignTest {
         }
     }
 
+    @Test fun primaryButtonGradientStaysLegible() {
+        // Le libellé du bouton principal est en grand corps : WCAG exige 3:1 pour du texte large.
+        // L'extrémité claire du dégradé est le point le plus défavorable.
+        for (background in listOf(Palette.START_TOP, Palette.START_BOTTOM, Palette.START_TOP_PRESSED, Palette.START_BOTTOM_PRESSED)) {
+            assertTrue(
+                "Libellé illisible sur le dégradé : " + background.toString(16),
+                Palette.contrast(0xFFFFFFFF.toInt(), background) >= 3.0,
+            )
+        }
+    }
+
+    @Test fun arcStaysVisibleOnIvory() {
+        // L'arc est une information graphique (seuil 3:1) et ne porte jamais de texte.
+        assertTrue("Arc trop pâle sur ivoire", Palette.contrast(Palette.BOTANICAL, Palette.BG) >= 3.0)
+    }
+
     @Test fun noLiteralColorsOutsideDesignPackage() {
         val root = File("../app/src/main/kotlin")
         assertTrue("Dossier app introuvable : " + root.absolutePath, root.isDirectory)

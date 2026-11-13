@@ -147,9 +147,17 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
                 rect.set(9.5f, 2.5f, 14.5f, 16f); canvas.drawOval(rect, stroke)
             }
             Kind.BLADE -> {
-                p.moveTo(4f, 19f); p.lineTo(18.5f, 4.5f); p.quadTo(21f, 3f, 19.5f, 6f)
-                p.lineTo(5f, 20f); p.close(); canvas.drawPath(p, stroke)
-                canvas.drawLine(4f, 16f, 8f, 20f, stroke)
+                for (i in 0 until 4) {
+                    canvas.save()
+                    canvas.rotate(i * 90f, 12f, 12f)
+                    p.reset()
+                    p.moveTo(12f, 12f)
+                    p.quadTo(15.5f, 6.5f, 12f, 2.5f)
+                    p.quadTo(8.5f, 6.5f, 12f, 12f)
+                    p.close()
+                    canvas.drawPath(p, stroke)
+                    canvas.restore()
+                }
             }
             Kind.MENU -> {
                 canvas.drawLine(4f, 6f, 20f, 6f, stroke)

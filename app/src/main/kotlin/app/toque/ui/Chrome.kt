@@ -17,6 +17,7 @@ import app.toque.core.machine.LinkState
 import app.toque.core.machine.MachineEvent
 import app.toque.core.machine.Snapshot
 import app.toque.core.protocol.Mcc
+import app.toque.ui.design.T
 
 /** Écran de l'appli (vue construite une fois, réutilisée). */
 abstract class Screen(val a: MainActivity) {
@@ -38,9 +39,10 @@ abstract class Screen(val a: MainActivity) {
 class TopBar(private val a: MainActivity) : LinearLayout(a) {
     private val back = Icon(a, Icon.Kind.BACK, Ui.TEXT)
     private val titleView = Ui.ellipsize(Ui.text(a, "", 24f, Ui.TEXT, Ui.MEDIUM))
-    private val temp = Ui.chip(a, "", Icon.Kind.THERMO, Ui.TEXT2)
+    private val temp = Ui.chip(a, "", Icon.Kind.THERMO, Ui.TEXT2, Ui.SURFACE)
     private val lid = Ui.chip(a, tr("Couvercle ouvert"), Icon.Kind.LID, Ui.WARN, Ui.WARN_WASH)
-    private val link = Ui.chip(a, "", Icon.Kind.LINK, Ui.TEXT2)
+    private val link = Ui.chip(a, "", Icon.Kind.LINK, Ui.TEXT2, Ui.SURFACE)
+    private val brand = Ui.horizontal(a, Gravity.CENTER)
     private val clock = Ui.text(a, "", 22f, Ui.TEXT, Ui.LIGHT).apply { Ui.focusable(this, 18f, normal = Ui.BG, pressed = Ui.SURFACE3) }
     private val home = Icon(a, Icon.Kind.HOME, Ui.TEXT2)
     private val handler = Handler(Looper.getMainLooper())
@@ -56,21 +58,39 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
     init {
         orientation = HORIZONTAL
         setGravity(Gravity.CENTER_VERTICAL)
-        setPadding(Ui.u(10), 0, Ui.u(18), 0)
-        setBackgroundColor(Ui.BG)
+        setPadding(Ui.u(12), 0, Ui.u(12), 0)
+        setBackgroundColor(T.BAR)
+
         back.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
         Ui.focusable(back, 30f, normal = Ui.BG, pressed = Ui.SURFACE3)
         back.setOnClickListener { a.back() }
-        addView(back, LayoutParams(Ui.u(52), Ui.u(52)))
-        addView(titleView, LayoutParams(0, Ui.WRAP, 1f).apply { leftMargin = Ui.u(6) })
-        addView(lid, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
-        addView(temp, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
-        addView(link, Ui.lp(Ui.WRAP, Ui.WRAP, r = 16))
-        addView(clock, Ui.lp(Ui.WRAP, Ui.WRAP, r = 6))
+
+        val left = Ui.horizontal(a)
+        left.addView(back, LayoutParams(Ui.u(52), Ui.u(52)))
+        left.addView(titleView, LayoutParams(0, Ui.WRAP, 1f).apply { leftMargin = Ui.u(6) })
+        addView(left, LayoutParams(0, Ui.MATCH, 1f))
+
+        // Marque centrée, encadrée de deux filets fins.
+        brand.addView(Icon(a, Icon.Kind.CHEF_HAT, Ui.BRAND), LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(7) })
+        brand.addView(Ui.text(a, "Toque", 20f, Ui.TEXT, Ui.MEDIUM))
+        val brandRow = Ui.horizontal(a, Gravity.CENTER)
+        brandRow.addView(separator(), LayoutParams(Ui.u(1), Ui.u(26)).apply { rightMargin = Ui.u(14) })
+        brandRow.addView(brand)
+        brandRow.addView(separator(), LayoutParams(Ui.u(1), Ui.u(26)).apply { leftMargin = Ui.u(14) })
+        addView(brandRow, LayoutParams(Ui.WRAP, Ui.MATCH))
+
+        val right = Ui.horizontal(a, Gravity.END or Gravity.CENTER_VERTICAL)
+        right.addView(lid, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
+        right.addView(temp, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
+        right.addView(link, Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
+        right.addView(separator(), LayoutParams(Ui.u(1), Ui.u(26)).apply { rightMargin = Ui.u(12) })
+        right.addView(clock, Ui.lp(Ui.WRAP, Ui.WRAP, r = 6))
         home.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
         Ui.focusable(home, 30f, normal = Ui.BG, pressed = Ui.SURFACE3)
         home.setOnClickListener { a.home() }
-        addView(home, LayoutParams(Ui.u(52), Ui.u(52)))
+        right.addView(home, LayoutParams(Ui.u(52), Ui.u(52)))
+        addView(right, LayoutParams(0, Ui.MATCH, 1f))
+
         lid.visibility = View.GONE
         temp.visibility = View.GONE
         // Accès caché aux réglages Android : 5 appuis rapides sur l'heure.
@@ -84,6 +104,8 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         }
     }
 
+    private fun separator(): View = View(a).apply { setBackgroundColor(Ui.STROKE) }
+
     fun startClock() {
         handler.removeCallbacks(tick)
         tick.run()
@@ -93,6 +115,8 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
 
     fun setTitle(t: String, canGoBack: Boolean) {
         titleView.text = t
+        // Sur l'accueil, la marque centrée porte déjà le nom : pas de doublon.
+        titleView.visibility = if (canGoBack) View.VISIBLE else View.GONE
         back.visibility = if (canGoBack) View.VISIBLE else View.INVISIBLE
         home.visibility = if (canGoBack) View.VISIBLE else View.GONE
     }

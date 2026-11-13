@@ -3,17 +3,25 @@ package app.toque.core.design
 /** Palette sémantique Ivoire & Vert botanique, testable sans Android. */
 object Palette {
     val BG = 0xFFF8F1EA.toInt()
-    val SURFACE = 0xFFFBF6F1.toInt()
-    val SURFACE2 = 0xFFF3EADF.toInt()
-    val SURFACE3 = 0xFFEAE0D3.toInt()
+    val SURFACE = 0xFFFAF5F0.toInt()
+    val SURFACE2 = 0xFFF5EEE7.toInt()
+    val SURFACE3 = 0xFFEDE4DC.toInt()
     val STROKE = 0xFFE3D9CB.toInt()
     val STROKE_STRONG = 0xFF8A7C66.toInt()
-    val TEXT = 0xFF252F2C.toInt()
+    val TEXT = 0xFF172D2C.toInt()
     val TEXT2 = 0xFF566056.toInt()
     val TEXT3 = 0xFF5A6359.toInt()
     val BRAND = 0xFF37562E.toInt()
     val BRAND_PRESSED = 0xFF2C4525.toInt()
-    val BOTANICAL = 0xFF7A962B.toInt()
+    val BOTANICAL = 0xFF559514.toInt()
+    /** Piste de l'arc des cadrans et graduations intérieures. */
+    val ARC_TRACK = 0xFFD4CABA.toInt()
+    val TICK = 0xFFCFC7BC.toInt()
+    /** Dégradé du bouton principal, du vert jaune au vert forêt. */
+    val START_TOP = 0xFF5A9620.toInt()
+    val START_BOTTOM = 0xFF2D5E3E.toInt()
+    val START_TOP_PRESSED = 0xFF4C8019.toInt()
+    val START_BOTTOM_PRESSED = 0xFF244C32.toInt()
     val WASH_BRAND = 0xFFE7EDDD.toInt()
     val OK = 0xFF2E6B3E.toInt()
     val WARN = 0xFF8A5A00.toInt()
@@ -23,6 +31,8 @@ object Palette {
     val WARN_WASH = 0xFFFBF0DC.toInt()
     val DISABLED_BG = 0xFFEDE5D8.toInt()
     val DISABLED_TEXT = 0xFFA79C88.toInt()
+    /** Ivoire légèrement translucide : laisse vivre le décor derrière la barre haute. */
+    val BAR = 0xEBF8F1EA.toInt()
     val RIPPLE = 0x14000000
     val SCRIM = 0xCC000000.toInt()
     val RECIPE_PLACEHOLDERS = intArrayOf(

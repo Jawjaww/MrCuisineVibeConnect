@@ -17,6 +17,12 @@ object T {
     val BRAND = Palette.BRAND
     val BRAND_PRESSED = Palette.BRAND_PRESSED
     val BOTANICAL = Palette.BOTANICAL
+    val ARC_TRACK = Palette.ARC_TRACK
+    val TICK = Palette.TICK
+    val START_TOP = Palette.START_TOP
+    val START_BOTTOM = Palette.START_BOTTOM
+    val START_TOP_PRESSED = Palette.START_TOP_PRESSED
+    val START_BOTTOM_PRESSED = Palette.START_BOTTOM_PRESSED
     val WASH_BRAND = Palette.WASH_BRAND
     val OK = Palette.OK
     val WARN = Palette.WARN
@@ -26,6 +32,7 @@ object T {
     val WARN_WASH = Palette.WARN_WASH
     val DISABLED_BG = Palette.DISABLED_BG
     val DISABLED_TEXT = Palette.DISABLED_TEXT
+    val BAR = Palette.BAR
     val RIPPLE = Palette.RIPPLE
     val SCRIM = Palette.SCRIM
     val RECIPE_PLACEHOLDERS = Palette.RECIPE_PLACEHOLDERS
@@ -34,13 +41,13 @@ object T {
         const val DISPLAY = 120f
         const val H1 = 40f
         const val H2 = 28f
-        const val H3 = 24f
+        const val H3 = 28f
         const val H4 = 20f
         const val BODY = 18f
         const val SMALL = 16f
         const val MICRO = 15f
         const val CAPTION = 13f
-        const val DIAL_VALUE = 64f
+        const val DIAL_VALUE = 60f
         const val DIAL_UNIT = 22f
         const val DIAL_LEGEND = 15f
     }
