@@ -23,7 +23,7 @@ import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
 import app.toque.ui.design.ReadoutCard
-import app.toque.ui.design.StripAction
+import app.toque.ui.design.RoundButton
 import app.toque.ui.screens.ScaleScreen
 import app.toque.ui.design.ToggleRoundButton
 import app.toque.ui.design.T
@@ -62,7 +62,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // La grille de référence est 1024×600, mais l'écran peut offrir plus de largeur
         // (2400×1080 donne 1333 unités). On répartit donc sur la largeur réellement disponible.
         val usable = Ui.widthUnits - 88f
-        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 321)
+        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 350)
         val root = Ui.vertical(c)
         root.setPadding(Ui.u(71), Ui.u(14), Ui.u(22), Ui.u(10))
 
@@ -107,38 +107,19 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
         // Les commandes sont centrées sous leur cadran : centre du cadran = 42 + 129 = 171
         // depuis le début de la rangée, la pastille faisant 85 de large.
+        // Les commandes sont resserrées : elles n'ont pas besoin de toute la largeur.
         val controlWidth = 85
-        val firstMargin = (dialSize / 2 - controlWidth / 2) - 42
-        val spacing = dialSize - controlWidth
+        val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
         val bottomRow = Ui.horizontal(c, Gravity.BOTTOM)
-        bottomRow.addView(directionToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
-            leftMargin = Ui.u(firstMargin)
-        })
-        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
-            leftMargin = Ui.u(spacing)
-        })
-        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
-            leftMargin = Ui.u(spacing)
-        })
+        val gap = 22
+        bottomRow.addView(directionToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP))
+        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
+        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
+        bottomRow.addView(weigh, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply { leftMargin = Ui.u(gap) })
         bottomRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
         bottomRow.addView(startButton, Ui.lp(Ui.u(238), Ui.u(73)))
         root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 4))
-
-        // Bandeau bas : accès direct aux actions secondaires.
-        root.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
-        val strip = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
-        strip.addView(StripAction(c, Icon.Kind.BOLT, tr("Turbo"),
-            onDown = { a.machine.turboDown(accessory) { v -> if (!v.ok) a.refusal(v) } },
-            onUp = { a.machine.turboUp() },
-        ), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        strip.addView(divider(), LinearLayout.LayoutParams(Ui.u(1), Ui.u(46)))
-        strip.addView(StripAction(c, Icon.Kind.REVERSE, tr("Marche à gauche")) { setReverse(!reverse) },
-            LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        strip.addView(divider(), LinearLayout.LayoutParams(Ui.u(1), Ui.u(46)))
-        strip.addView(StripAction(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) },
-            LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        root.addView(strip, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         refresh()
         return root

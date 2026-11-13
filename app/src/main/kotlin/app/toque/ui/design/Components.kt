@@ -236,13 +236,14 @@ class RoundButton(
     label: String = "",
     size: Int = 67,
     private val castShadow: Boolean = false,
+    private val shadowAlpha: Int? = null,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = if (size < 64) 5 else 9
 
     /** Taille réellement occupée : le disque plus la place de sa pénombre. */
     val outerSize: Int = size + 2 * spread
-    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 64) 46 else 58, cast = castShadow)
+    private val circle = SoftCircle(context, spread = spread, alpha = shadowAlpha ?: if (size < 64) 46 else 58, cast = castShadow)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
@@ -348,8 +349,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 22) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 22) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
