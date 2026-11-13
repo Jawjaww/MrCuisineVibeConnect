@@ -9,6 +9,9 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.ColorFilter
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.view.Gravity
@@ -106,23 +109,68 @@ object ShadowLayer {
     }
 }
 
-/** Disque blanc avec sa pénombre, dessinée avant le fond. */
-class SoftCircle(context: Context, private val spread: Int = 7, private val alpha: Int = 46) : FrameLayout(context) {
-    private var shadow: Bitmap? = null
-    private var shadowSpread = 0
+/**
+ * Fond de bouton : pénombre + disque, dessinés dans les limites de la vue.
+ *
+ * Android rogne le dessin d'une vue à ses propres limites : une ombre dessinée hors du view est
+ * coupée net sur un carré. La vue réserve donc le débord, et ce Drawable dessine l'ombre, la face
+ * et l'anneau de focus à partir de son état.
+ */
+class DiscBackground(
+    private val spread: Int,
+    private val alpha: Int,
+) : Drawable() {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private var state = intArrayOf()
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        shadowSpread = Ui.u(spread)
-        shadow = try {
-            ShadowLayer.circle(minOf(w, h), shadowSpread, alpha)
-        } catch (_: Throwable) {
-            null
-        }
+    override fun isStateful(): Boolean = true
+
+    override fun onStateChange(newState: IntArray): Boolean {
+        state = newState
+        invalidateSelf()
+        return true
     }
 
     override fun draw(canvas: Canvas) {
-        shadow?.let { canvas.drawBitmap(it, -shadowSpread.toFloat(), -shadowSpread + Ui.uf(2f), null) }
-        super.draw(canvas)
+        val side = bounds.width()
+        if (side <= 0) return
+        val spreadPx = Ui.u(spread)
+        val disc = (side - 2 * spreadPx).coerceAtLeast(1)
+        val radius = disc / 2f
+        val cx = bounds.exactCenterX()
+        val cy = bounds.exactCenterY()
+        val pressed = state.contains(android.R.attr.state_pressed)
+        val focused = state.contains(android.R.attr.state_focused)
+        val selected = state.contains(android.R.attr.state_selected)
+
+        val shadow = ShadowLayer.circle(disc, spreadPx, alpha)
+        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(2f) - shadow.height / 2f, null)
+
+        fill.color = when {
+            selected -> T.BRAND
+            pressed -> T.SURFACE2
+            else -> T.BUTTON_FACE
+        }
+        canvas.drawCircle(cx, cy, radius, fill)
+        if (focused) {
+            ring.color = if (selected) T.SURFACE else T.BRAND
+            ring.strokeWidth = Ui.uf(T.Line.FOCUS)
+            canvas.drawCircle(cx, cy, radius - ring.strokeWidth / 2f, ring)
+        }
+    }
+
+    override fun setAlpha(alpha: Int) { fill.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(colorFilter: ColorFilter?) { fill.colorFilter = colorFilter; invalidateSelf() }
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+/** Disque de bouton : la vue réserve le débord nécessaire à la pénombre. */
+class SoftCircle(context: Context, spread: Int = 5, alpha: Int = 46) : FrameLayout(context) {
+    init {
+        isClickable = true
+        isFocusable = true
+        background = DiscBackground(spread, alpha)
     }
 }
 
@@ -143,7 +191,8 @@ class RoundButton(
     size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context, spread = if (size < 60) 5 else 8, alpha = if (size < 60) 46 else 56)
+    private val spread = if (size < 60) 4 else 6
+    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 60) 46 else 56)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
@@ -151,11 +200,10 @@ class RoundButton(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 18 else 26), Ui.u(if (size < 60) 18 else 26), Gravity.CENTER))
-        Focusable.states(circle, size / 2f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
-        caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5)) }
+        addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
+        caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1)) }
         isFocusable = false
         isClickable = false
         contentDescription = label
@@ -164,6 +212,7 @@ class RoundButton(
     fun select(selected: Boolean) {
         circle.isSelected = selected
         icon.color = if (selected) T.SURFACE else T.BRAND
+        invalidate()
         caption?.setTextColor(if (selected) T.BRAND else T.TEXT2)
     }
 
@@ -185,7 +234,8 @@ class ToggleRoundButton(
     size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context, spread = 8, alpha = 56)
+    private val spread = 6
+    private val circle = SoftCircle(context, spread = spread, alpha = 56)
     private val icon = Icon(context, Icon.Kind.SYNC, T.BRAND)
     private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var on = false
@@ -198,7 +248,6 @@ class ToggleRoundButton(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
-        Focusable.states(circle, size / 2f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -206,8 +255,8 @@ class ToggleRoundButton(
                 apply()
             }
         }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
-        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
         isFocusable = false
         isClickable = false
     }
@@ -540,7 +589,8 @@ class HoldRoundButton(
     private val onDown: () -> Unit,
     private val onUp: () -> Unit,
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context, spread = 8, alpha = 56)
+    private val spread = 6
+    private val circle = SoftCircle(context, spread = spread, alpha = 56)
     private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
     private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var held = false
@@ -549,7 +599,6 @@ class HoldRoundButton(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
-        Focusable.states(circle, 31f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -566,7 +615,6 @@ class HoldRoundButton(
                         held = false
                         view.isPressed = false
                         icon.color = T.BRAND
-                        Focusable.states(circle, 31f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
                         onUp()
                     }
                 }
@@ -574,8 +622,8 @@ class HoldRoundButton(
             true
         }
         circle.setOnClickListener { /* Turbo est volontairement une action maintenue. */ }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(62), Ui.u(62)))
-        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 5))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(62 + 2 * spread), Ui.u(62 + 2 * spread)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
         isFocusable = false
     }
 
@@ -621,6 +669,39 @@ class WeightBadge(context: Context) : LinearLayout(context) {
         value.setTextColor(if (online) T.TEXT else T.TEXT2)
         icon.color = if (online) T.BRAND else T.TEXT2
         underline.visibility = if (online) View.VISIBLE else View.INVISIBLE
+    }
+}
+
+/** Valeurs courantes (température mesurée, poids) réunies au-dessus du bouton principal. */
+class ReadoutCard(context: Context) : LinearLayout(context) {
+    private val temp = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
+    private val weight = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
+    private val underline = View(context).apply { setBackgroundColor(T.BOTANICAL) }
+
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Ui.round(T.SURFACE, T.Radius.CARD_SM, T.STROKE, T.Line.HAIR)
+        setPadding(Ui.u(10), Ui.u(8), Ui.u(10), Ui.u(8))
+        addView(cell(Icon.Kind.THERMO, temp), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        addView(View(context).apply { setBackgroundColor(T.STROKE) }, LinearLayout.LayoutParams(Ui.u(1), Ui.u(38)))
+        addView(cell(Icon.Kind.SCALE, weight, underline), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+    }
+
+    private fun cell(icon: Icon.Kind, value: TextView, underline: View? = null): LinearLayout {
+        val box = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
+        box.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(20), Ui.u(20)))
+        box.addView(value, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
+        if (underline != null) box.addView(underline, Ui.lp(Ui.u(34), Ui.u(3), t = 3))
+        return box
+    }
+
+    fun set(tempC: Int?, weightG: Int?) {
+        temp.text = if (tempC != null) "$tempC °C" else "—"
+        temp.setTextColor(if (tempC != null) T.TEXT else T.TEXT3)
+        weight.text = if (weightG != null) "$weightG g" else "—"
+        weight.setTextColor(if (weightG != null) T.TEXT else T.TEXT3)
+        underline.visibility = if (weightG != null) View.VISIBLE else View.INVISIBLE
     }
 }
 

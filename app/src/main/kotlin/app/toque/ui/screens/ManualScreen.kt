@@ -22,6 +22,7 @@ import app.toque.ui.Ui
 import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
+import app.toque.ui.design.ReadoutCard
 import app.toque.ui.design.ToggleRoundButton
 import app.toque.ui.design.T
 
@@ -43,6 +44,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var startButton: PrimaryButton
     private lateinit var hint: TextView
     private lateinit var turbo: HoldRoundButton
+    private lateinit var readout: ReadoutCard
 
     private var live = false
     private var wasLive = false
@@ -81,7 +83,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }
         root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
 
-        val commands = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        val commands = Ui.horizontal(c, Gravity.CENTER_VERTICAL or Gravity.TOP)
         directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
         directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
         accessoryToggle = ToggleRoundButton(c) {
@@ -95,9 +97,14 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
         commands.addView(turbo, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        // Température et poids courants juste au-dessus du bouton principal, dans leur carte.
+        val right = Ui.vertical(c, Gravity.CENTER_HORIZONTAL)
+        readout = ReadoutCard(c)
+        right.addView(readout, Ui.lp(Ui.u(248), Ui.u(86)))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        commands.addView(startButton, Ui.lp(Ui.u(240), Ui.u(86)))
-        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP, t = 26))
+        right.addView(startButton, Ui.lp(Ui.u(248), Ui.u(86), t = 8))
+        commands.addView(right, Ui.lp(Ui.WRAP, Ui.WRAP))
+        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP, t = 16))
         refresh()
         return root
     }
@@ -276,6 +283,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
         speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (s.speedLevel > 0) (s.speedLevel / 10f).coerceIn(0f, 1f) else null)
+
+        readout.set(if (s.hasSample) s.actualTempC else null, if (s.hasSample) s.weightG else null)
 
         val manualJob = s.kind?.name == "MANUAL" &&
             (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
