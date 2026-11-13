@@ -23,6 +23,8 @@ import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
 import app.toque.ui.design.ReadoutCard
+import app.toque.ui.design.StripAction
+import app.toque.ui.screens.ScaleScreen
 import app.toque.ui.design.ToggleRoundButton
 import app.toque.ui.design.T
 
@@ -56,13 +58,12 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        val root = Ui.vertical(c, Gravity.CENTER_VERTICAL)
+        val root = Ui.vertical(c)
         root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(12))
 
-        val dials = Ui.horizontal(c, Gravity.CENTER_HORIZONTAL or Gravity.TOP)
+        // Rangée haute : les trois cadrans, puis la carte des valeurs sur la droite.
+        val dials = Ui.horizontal(c, Gravity.TOP)
         timeDial = Dial(c, Icon.Kind.CLOCK)
-        // La vitesse occupe le centre, le thermomètre va à droite : ce sont les trois éléments
-        // principaux de l'écran, ils prennent toute la largeur.
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED)
         tempDial = Dial(c, Icon.Kind.THERMO)
         val all = listOf(timeDial, speedDial, tempDial)
@@ -74,40 +75,61 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
                 if (index < 2) rightMargin = Ui.u(14)
             })
         }
-        root.addView(dials, Ui.lp(Ui.MATCH, Ui.WRAP))
+        val topRow = Ui.horizontal(c, Gravity.TOP)
+        topRow.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
+        topRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
+        readout = ReadoutCard(c)
+        topRow.addView(readout, Ui.lp(Ui.u(232), Ui.WRAP))
+        root.addView(topRow, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.05f)
             visibility = View.GONE
         }
-        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
+        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
 
-        val commands = Ui.horizontal(c, Gravity.CENTER_VERTICAL or Gravity.TOP)
-        directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
-        directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
+        // Rangée basse : les commandes sous les cadrans, le bouton principal sous la carte.
+        val direction = ToggleRoundButton(c) { setReverse(!reverse) }
+        directionToggle = direction
+        direction.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
         accessoryToggle = ToggleRoundButton(c) {
             setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
         }
         accessoryToggle.configure(tr("Fouet"), Icon.Kind.WHISK, tr("Lame"), Icon.Kind.BLADE)
-        // Les commandes se répartissent sous les cadrans, comme sur la référence.
-        commands.addView(directionToggle, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        commands.addView(accessoryToggle, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
         }, onUp = { a.machine.turboUp() })
-        commands.addView(turbo, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        // Température et poids courants juste au-dessus du bouton principal, dans leur carte.
-        val right = Ui.vertical(c, Gravity.CENTER_HORIZONTAL)
-        readout = ReadoutCard(c)
-        right.addView(readout, Ui.lp(Ui.u(248), Ui.u(86)))
+
+        val bottomRow = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        bottomRow.addView(direction, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP))
+        bottomRow.addView(accessoryToggle, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply { leftMargin = Ui.u(14) })
+        bottomRow.addView(turbo, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply { leftMargin = Ui.u(14) })
+        bottomRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        right.addView(startButton, Ui.lp(Ui.u(248), Ui.u(86), t = 8))
-        commands.addView(right, Ui.lp(Ui.WRAP, Ui.WRAP))
-        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP, t = 16))
+        bottomRow.addView(startButton, Ui.lp(Ui.u(232), Ui.u(86)))
+        root.addView(bottomRow, Ui.lp(Ui.MATCH, Ui.WRAP, t = 30))
+
+        // Bandeau bas : accès direct aux actions secondaires, comme sur la référence.
+        root.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
+        val strip = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        strip.addView(StripAction(c, Icon.Kind.BOLT, tr("Turbo"),
+            onDown = { a.machine.turboDown(accessory) { v -> if (!v.ok) a.refusal(v) } },
+            onUp = { a.machine.turboUp() },
+        ), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        strip.addView(divider(), LinearLayout.LayoutParams(Ui.u(1), Ui.u(46)))
+        strip.addView(StripAction(c, Icon.Kind.REVERSE, tr("Marche à gauche")) { setReverse(!reverse) },
+            LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        strip.addView(divider(), LinearLayout.LayoutParams(Ui.u(1), Ui.u(46)))
+        strip.addView(StripAction(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) },
+            LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        root.addView(strip, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
+
         refresh()
         return root
     }
+
+    private fun divider(): View = View(c).apply { setBackgroundColor(Ui.STROKE) }
 
     private val tempSteps: IntArray get() = intArrayOf(0) + (1..19).toList().toIntArray()
 

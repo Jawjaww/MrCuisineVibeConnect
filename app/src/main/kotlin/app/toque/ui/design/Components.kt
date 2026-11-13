@@ -79,9 +79,10 @@ object Focusable {
 object ShadowLayer {
     private val cache = HashMap<Long, Bitmap>()
 
-    fun circle(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
+    fun circle(diameterPx: Int, spreadPx: Int, maxAlpha: Int, aspectY: Float = 0.72f): Bitmap {
         require(diameterPx > 0)
-        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong()
+        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() +
+            (aspectY * 100).toLong() * 1_000_000_000L
         cache[key]?.let { return it }
         val side = diameterPx + 2 * spreadPx
         val pixels = IntArray(side * side)
@@ -92,7 +93,8 @@ object ShadowLayer {
             val dy = y - c
             for (x in 0 until side) {
                 val dx = x - c
-                val d = sqrt(dx * dx + dy * dy)
+                // Aplatissement vertical : l'ombre s'étend davantage sous l'objet qu'au-dessus.
+                val d = sqrt(dx * dx + (dy / aspectY) * (dy / aspectY))
                 val a = if (d <= r) {
                     maxAlpha
                 } else {
@@ -145,7 +147,7 @@ class DiscBackground(
         val selected = state.contains(android.R.attr.state_selected)
 
         val shadow = ShadowLayer.circle(disc, spreadPx, alpha)
-        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(2f) - shadow.height / 2f, null)
+        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(5f) - shadow.height / 2f, null)
 
         fill.color = when {
             selected -> T.BRAND
@@ -188,18 +190,18 @@ class RoundButton(
     context: Context,
     iconKind: Icon.Kind,
     label: String = "",
-    size: Int = 62,
+    size: Int = 80,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val spread = if (size < 60) 4 else 6
-    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 60) 46 else 56)
+    private val spread = if (size < 64) 5 else 9
+    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 64) 46 else 58)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 18 else 26), Ui.u(if (size < 60) 18 else 26), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 24 else 36), Ui.u(if (size < 64) 24 else 36), Gravity.CENTER))
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
         addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
@@ -231,11 +233,11 @@ class RoundButton(
  */
 class ToggleRoundButton(
     context: Context,
-    size: Int = 62,
+    size: Int = 80,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val spread = 6
-    private val circle = SoftCircle(context, spread = spread, alpha = 56)
+    private val spread = 9
+    private val circle = SoftCircle(context, spread = spread, alpha = 58)
     private val icon = Icon(context, Icon.Kind.SYNC, T.BRAND)
     private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var on = false
@@ -247,7 +249,7 @@ class ToggleRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(36), Ui.u(36), Gravity.CENTER))
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -298,8 +300,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 46) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 46) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 54) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 54) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -314,20 +316,20 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         box.addView(face, Ui.flp(Ui.u(SIZE), Ui.u(SIZE)))
         box.addView(
             Icon(context, topIcon, T.TEXT),
-            Ui.flp(Ui.u(26), Ui.u(26), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(36) },
+            Ui.flp(Ui.u(34), Ui.u(34), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(30) },
         )
         if (bottomIcon != null) {
             box.addView(
                 Icon(context, bottomIcon, T.TEXT),
-                Ui.flp(Ui.u(26), Ui.u(26), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(38) },
+                Ui.flp(Ui.u(34), Ui.u(34), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(30) },
             )
         }
         addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(46), Ui.u(46), r = 8))
-        actions.addView(plus, Ui.lp(Ui.u(46), Ui.u(46)))
+        actions.addView(minus, Ui.lp(Ui.u(54), Ui.u(54), r = 8))
+        actions.addView(plus, Ui.lp(Ui.u(54), Ui.u(54)))
         // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(46), t = -24))
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(54), t = -26))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
@@ -424,7 +426,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             canvas.drawBitmap(
                 shadowBitmap,
                 cx - shadowBitmap.width / 2f,
-                cy + Ui.uf(4f) - shadowBitmap.height / 2f,
+                cy + Ui.uf(7f) - shadowBitmap.height / 2f,
                 null,
             )
             // Couche figée : disque et graduations. Redessinée uniquement si la taille change.
@@ -545,7 +547,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
 
     companion object {
         /** Diamètre du cadran, en unités de la grille 1024×600. */
-        const val SIZE = 300
+        const val SIZE = 232
 
         private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
     }
@@ -589,8 +591,8 @@ class HoldRoundButton(
     private val onDown: () -> Unit,
     private val onUp: () -> Unit,
 ) : LinearLayout(context) {
-    private val spread = 6
-    private val circle = SoftCircle(context, spread = spread, alpha = 56)
+    private val spread = 9
+    private val circle = SoftCircle(context, spread = spread, alpha = 58)
     private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
     private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var held = false
@@ -598,7 +600,7 @@ class HoldRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(36), Ui.u(36), Gravity.CENTER))
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -622,7 +624,7 @@ class HoldRoundButton(
             true
         }
         circle.setOnClickListener { /* Turbo est volontairement une action maintenue. */ }
-        addView(circle, LinearLayout.LayoutParams(Ui.u(62 + 2 * spread), Ui.u(62 + 2 * spread)))
+        addView(circle, LinearLayout.LayoutParams(Ui.u(80 + 2 * spread), Ui.u(80 + 2 * spread)))
         addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
         isFocusable = false
     }
@@ -674,26 +676,26 @@ class WeightBadge(context: Context) : LinearLayout(context) {
 
 /** Valeurs courantes (température mesurée, poids) réunies au-dessus du bouton principal. */
 class ReadoutCard(context: Context) : LinearLayout(context) {
-    private val temp = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
-    private val weight = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
+    private val temp = Ui.text(context, "—", T.Type.H3, T.TEXT, Ui.MEDIUM)
+    private val weight = Ui.text(context, "—", T.Type.H3, T.TEXT, Ui.MEDIUM)
     private val underline = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
-        orientation = HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        background = Ui.round(T.SURFACE, T.Radius.CARD_SM, T.STROKE, T.Line.HAIR)
-        setPadding(Ui.u(10), Ui.u(8), Ui.u(10), Ui.u(8))
-        addView(cell(Icon.Kind.THERMO, temp), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
-        addView(View(context).apply { setBackgroundColor(T.STROKE) }, LinearLayout.LayoutParams(Ui.u(1), Ui.u(38)))
-        addView(cell(Icon.Kind.SCALE, weight, underline), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        background = Ui.round(T.BUTTON_FACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
+        setPadding(Ui.u(14), Ui.u(14), Ui.u(14), Ui.u(14))
+        addView(row(Icon.Kind.THERMO, temp), Ui.lp(Ui.MATCH, Ui.WRAP))
+        addView(View(context).apply { setBackgroundColor(T.STROKE) }, Ui.lp(Ui.MATCH, Ui.u(1), t = 8, b = 8))
+        addView(row(Icon.Kind.SCALE, weight), Ui.lp(Ui.MATCH, Ui.WRAP))
+        addView(underline, Ui.lp(Ui.u(70), Ui.u(3), t = 8))
     }
 
-    private fun cell(icon: Icon.Kind, value: TextView, underline: View? = null): LinearLayout {
-        val box = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
-        box.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(20), Ui.u(20)))
-        box.addView(value, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
-        if (underline != null) box.addView(underline, Ui.lp(Ui.u(34), Ui.u(3), t = 3))
-        return box
+    private fun row(icon: Icon.Kind, value: TextView): LinearLayout {
+        val line = Ui.horizontal(context, Gravity.CENTER_VERTICAL)
+        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(26), Ui.u(26), r = 10))
+        line.addView(value)
+        return line
     }
 
     fun set(tempC: Int?, weightG: Int?) {
@@ -702,6 +704,54 @@ class ReadoutCard(context: Context) : LinearLayout(context) {
         weight.text = if (weightG != null) "$weightG g" else "—"
         weight.setTextColor(if (weightG != null) T.TEXT else T.TEXT3)
         underline.visibility = if (weightG != null) View.VISIBLE else View.INVISIBLE
+    }
+}
+
+/** Raccourci du bandeau bas : icône et libellé, action simple ou maintenue. */
+class StripAction(
+    context: Context,
+    iconKind: Icon.Kind,
+    label: String,
+    private val onClick: (() -> Unit)? = null,
+    private val onDown: (() -> Unit)? = null,
+    private val onUp: (() -> Unit)? = null,
+) : LinearLayout(context) {
+    private val icon = Icon(context, iconKind, T.BRAND)
+    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
+    private var held = false
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER
+        setPadding(Ui.u(8), Ui.u(6), Ui.u(8), Ui.u(6))
+        addView(icon, Ui.lp(Ui.u(38), Ui.u(38)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
+        isClickable = true
+        isFocusable = true
+        background = Ui.pressable(Ui.round(0, T.Radius.CARD_SM), T.Radius.CARD_SM)
+        if (onDown != null || onUp != null) {
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (!held) {
+                            held = true
+                            view.isPressed = true
+                            onDown?.invoke()
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (held) {
+                            held = false
+                            view.isPressed = false
+                            onUp?.invoke()
+                        }
+                    }
+                }
+                true
+            }
+        } else {
+            setOnClickListener { onClick?.invoke() }
+        }
     }
 }
 
