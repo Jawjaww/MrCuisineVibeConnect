@@ -346,7 +346,7 @@ class ToggleRoundButton(
 }
 
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
-class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
+class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
     private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true) { onSelect(); onMinus() }
     private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true) { onSelect(); onPlus() }
@@ -361,7 +361,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         gravity = Gravity.CENTER_HORIZONTAL
         face.hasBottomIcon = bottomIcon != null
         val box = FrameLayout(context)
-        box.addView(face, Ui.flp(Ui.u(SIZE), Ui.u(SIZE)))
+        box.addView(face, Ui.flp(Ui.u(size), Ui.u(size)))
         box.addView(
             Icon(context, topIcon, T.TEXT),
             Ui.flp(Ui.u(34), Ui.u(34), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(30) },
@@ -372,7 +372,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
                 Ui.flp(Ui.u(34), Ui.u(34), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(30) },
             )
         }
-        addView(box, LinearLayout.LayoutParams(Ui.u(SIZE), Ui.u(SIZE)))
+        addView(box, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
         actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
         actions.addView(plus, Ui.lp(Ui.u(plus.outerSize), Ui.u(plus.outerSize)))
@@ -595,7 +595,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     }
 
     companion object {
-        /** Diamètre du cadran, en unités de la grille 1024×600. */
+        /** Taille de repli du cadran, en unités de la grille 1024×600. */
         const val SIZE = 258
 
         private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
@@ -725,24 +725,25 @@ class WeightBadge(context: Context) : LinearLayout(context) {
 
 /** Valeurs courantes (température mesurée, poids) réunies au-dessus du bouton principal. */
 class ReadoutCard(context: Context) : LinearLayout(context) {
-    private val temp = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
-    private val weight = Ui.text(context, "—", T.Type.H4, T.TEXT, Ui.MEDIUM)
+    private val temp = Ui.text(context, "—", T.Type.H2, T.TEXT, Ui.MEDIUM)
+    private val weight = Ui.text(context, "—", T.Type.H2, T.TEXT, Ui.MEDIUM)
     private val underline = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         background = Ui.round(T.BUTTON_FACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
-        setPadding(Ui.u(12), Ui.u(12), Ui.u(12), Ui.u(12))
-        addView(row(Icon.Kind.THERMO, temp), Ui.lp(Ui.MATCH, Ui.WRAP))
-        addView(View(context).apply { setBackgroundColor(T.STROKE) }, Ui.lp(Ui.MATCH, Ui.u(1), t = 8, b = 8))
-        addView(row(Icon.Kind.SCALE, weight), Ui.lp(Ui.MATCH, Ui.WRAP))
-        addView(underline, Ui.lp(Ui.u(70), Ui.u(3), t = 8))
+        setPadding(Ui.u(16), Ui.u(16), Ui.u(16), Ui.u(16))
+        // Les deux valeurs se répartissent sur la hauteur de la carte.
+        addView(row(Icon.Kind.THERMO, temp), Ui.lp(Ui.MATCH, 0, weight = 1f))
+        addView(View(context).apply { setBackgroundColor(T.STROKE) }, Ui.lp(Ui.MATCH, Ui.u(1)))
+        addView(row(Icon.Kind.SCALE, weight), Ui.lp(Ui.MATCH, 0, weight = 1f))
+        addView(underline, Ui.lp(Ui.u(80), Ui.u(4), t = 6))
     }
 
     private fun row(icon: Icon.Kind, value: TextView): LinearLayout {
         val line = Ui.horizontal(context, Gravity.CENTER_VERTICAL)
-        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(22), Ui.u(22), r = 8))
+        line.addView(Icon(context, icon, T.TEXT2), Ui.lp(Ui.u(30), Ui.u(30), r = 12))
         line.addView(value)
         return line
     }

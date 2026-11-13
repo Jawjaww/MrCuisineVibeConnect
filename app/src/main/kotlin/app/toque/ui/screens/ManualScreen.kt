@@ -47,6 +47,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var hint: TextView
     private lateinit var turbo: HoldRoundButton
     private lateinit var readout: ReadoutCard
+    private var dialSize = Dial.SIZE
 
     private var live = false
     private var wasLive = false
@@ -58,21 +59,24 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        // Grille relevée sur la maquette de référence (1024×600).
+        // La grille de référence est 1024×600, mais l'écran peut offrir plus de largeur
+        // (2400×1080 donne 1333 unités). On répartit donc sur la largeur réellement disponible.
+        val usable = Ui.widthUnits - 88f
+        dialSize = ((usable - cardWidth() - 28f) / 3f).toInt().coerceIn(200, 321)
         val root = Ui.vertical(c)
         root.setPadding(Ui.u(71), Ui.u(14), Ui.u(22), Ui.u(10))
 
         // Rangée haute : les trois cadrans, puis la carte des valeurs resserrée à droite.
         val dials = Ui.horizontal(c, Gravity.TOP)
-        timeDial = Dial(c, Icon.Kind.CLOCK)
-        speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED)
-        tempDial = Dial(c, Icon.Kind.THERMO)
+        timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
+        speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED, size = dialSize)
+        tempDial = Dial(c, Icon.Kind.THERMO, size = dialSize)
         val all = listOf(timeDial, speedDial, tempDial)
         for ((index, dial) in all.withIndex()) {
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
-            dials.addView(dial, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply {
+            dials.addView(dial, LinearLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
                 if (index < 2) rightMargin = Ui.u(1)
             })
         }
@@ -80,7 +84,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         topRow.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
         topRow.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         readout = ReadoutCard(c)
-        topRow.addView(readout, Ui.lp(Ui.u(112), Ui.u(108), t = 68, r = 10))
+        topRow.addView(readout, Ui.lp(Ui.u(cardWidth()), Ui.u((cardWidth() * 0.95f).toInt()), t = 68, r = 10))
         root.addView(topRow, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
@@ -104,8 +108,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // Les commandes sont centrées sous leur cadran : centre du cadran = 42 + 129 = 171
         // depuis le début de la rangée, la pastille faisant 85 de large.
         val controlWidth = 85
-        val firstMargin = (Dial.SIZE / 2 - controlWidth / 2) - 42
-        val spacing = Dial.SIZE - controlWidth
+        val firstMargin = (dialSize / 2 - controlWidth / 2) - 42
+        val spacing = dialSize - controlWidth
         val bottomRow = Ui.horizontal(c, Gravity.BOTTOM)
         bottomRow.addView(directionToggle, LinearLayout.LayoutParams(Ui.u(controlWidth), Ui.WRAP).apply {
             leftMargin = Ui.u(firstMargin)
@@ -139,6 +143,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         refresh()
         return root
     }
+
+    /** La carte des valeurs occupe ~16 % de la largeur disponible, entre 160 et 240 unités. */
+    private fun cardWidth(): Int = (Ui.widthUnits * 0.16f).toInt().coerceIn(160, 240)
 
     private fun divider(): View = View(c).apply { setBackgroundColor(Ui.STROKE) }
 

@@ -55,10 +55,20 @@ object Ui {
     /** Facteur d'échelle : 1 unité = 1 px sur un écran 1024×600. */
     var scale = 1f
 
+    /** Largeur et hauteur réellement disponibles, exprimées dans la grille de référence. */
+    var widthUnits = 1024f
+        private set
+    var heightUnits = 600f
+        private set
+
     fun init(widthPx: Int, heightPx: Int) {
         val w = maxOf(widthPx, heightPx)
         val h = minOf(widthPx, heightPx)
         scale = minOf(w / 1024f, h / 600f)
+        if (scale > 0f) {
+            widthUnits = w / scale
+            heightUnits = h / scale
+        }
     }
 
     fun u(v: Float): Int = Math.round(v * scale)
