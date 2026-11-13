@@ -81,6 +81,42 @@ object Focusable {
 object ShadowLayer {
     private val cache = HashMap<Long, Bitmap>()
 
+    /**
+     * Ombre portée classique, décalée vers le bas mais visible sur tout le pourtour : c'est elle
+     * qui marque qu'un bouton est **au-dessus** du cadran qu'il chevauche.
+     */
+    fun drop(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
+        require(diameterPx > 0)
+        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() or (1L shl 62)
+        cache[key]?.let { return it }
+        val side = diameterPx + 2 * spreadPx
+        val pixels = IntArray(side * side)
+        val r = diameterPx / 2f
+        val c = side / 2f
+        val offsetY = r * 0.16f
+        val semiX = r * 0.97f
+        val semiY = r * 0.92f
+        val fade = (spreadPx * 1.6f).coerceAtLeast(1f)
+        for (y in 0 until side) {
+            val dy = y - c
+            for (x in 0 until side) {
+                val dx = x - c
+                val ex = dx / semiX
+                val ey = (dy - offsetY) / semiY
+                val e = sqrt(ex * ex + ey * ey)
+                val t = if (e <= 0.72f) 0f else e - 0.72f
+                val border = minOf(x, side - 1 - x, y, side - 1 - y).toFloat()
+                val window = (border / fade).coerceIn(0f, 1f)
+                val a = (maxAlpha * exp(-(t * t) * 3.6f) * window).toInt()
+                if (a > 0) pixels[y * side + x] = a.coerceIn(0, 255) shl 24
+            }
+        }
+        val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, side, 0, 0, side, side)
+        cache[key] = bitmap
+        return bitmap
+    }
+
     fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
         require(diameterPx > 0)
         val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong()
@@ -128,6 +164,7 @@ object ShadowLayer {
 class DiscBackground(
     private val spread: Int,
     private val alpha: Int,
+    private val cast: Boolean = false,
 ) : Drawable() {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -153,7 +190,7 @@ class DiscBackground(
         val focused = state.contains(android.R.attr.state_focused)
         val selected = state.contains(android.R.attr.state_selected)
 
-        val shadow = ShadowLayer.contact(disc, spreadPx, alpha)
+        val shadow = if (cast) ShadowLayer.drop(disc, spreadPx, alpha) else ShadowLayer.contact(disc, spreadPx, alpha)
         canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(5f) - shadow.height / 2f, null)
 
         fill.color = when {
@@ -175,11 +212,11 @@ class DiscBackground(
 }
 
 /** Disque de bouton : la vue réserve le débord nécessaire à la pénombre. */
-class SoftCircle(context: Context, spread: Int = 5, alpha: Int = 46) : FrameLayout(context) {
+class SoftCircle(context: Context, spread: Int = 5, alpha: Int = 46, cast: Boolean = false) : FrameLayout(context) {
     init {
         isClickable = true
         isFocusable = true
-        background = DiscBackground(spread, alpha)
+        background = DiscBackground(spread, alpha, cast)
     }
 }
 
@@ -198,13 +235,14 @@ class RoundButton(
     iconKind: Icon.Kind,
     label: String = "",
     size: Int = 67,
+    private val castShadow: Boolean = false,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = if (size < 64) 5 else 9
 
     /** Taille réellement occupée : le disque plus la place de sa pénombre. */
     val outerSize: Int = size + 2 * spread
-    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 64) 46 else 58)
+    private val circle = SoftCircle(context, spread = spread, alpha = if (size < 64) 46 else 58, cast = castShadow)
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
@@ -310,8 +348,8 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55) { onSelect(); onPlus() }
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -339,7 +377,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
         actions.addView(plus, Ui.lp(Ui.u(plus.outerSize), Ui.u(plus.outerSize)))
         // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = -30))
+        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = -44))
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
