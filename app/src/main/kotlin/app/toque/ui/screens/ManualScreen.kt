@@ -61,29 +61,33 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        // Tableau de bord : les cadrans doivent dominer, comme sur un appareil de cuisine.
-        //   mini-cadrans 90 · cadrans ≤ 315 · débord des − / + · Démarrer 60
-        // Les commandes se posent à cheval sur les flancs des cadrans, dans leur zone basse.
-        val contentWidth = (Ui.widthUnits - 32f).toInt()
+        // Quatre étages : mini-cadrans 140 en haut, cadrans, puis les commandes SUR LES FLANCS
+        // des cadrans mais nettement sous la ligne des − / +. Les ancrages passent par la gravité :
+        // la fenêtre réelle est plus étroite que l'écran quand il y a une encoche.
         val button = 96
-        // 335 : le plus grand cadran qui laisse encore la place aux − / + puis à Démarrer.
-        dialSize = ((contentWidth - 40f) / 3f).toInt().coerceIn(150, 335)
-        // Gouttière minimale : les cadrans se touchent presque, le surplus va aux marges.
         val gap = 6
-        val used = 3 * dialSize + 2 * gap
-        val left = ((contentWidth - used) / 2).coerceAtLeast(0)
-        val controlTop = 346
+        val avail = (Ui.widthUnits - 32f).toInt()
+        dialSize = ((avail - 4 * button - 6 * gap) / 3).coerceIn(150, 220)
+        val period = button + dialSize + 2 * gap
+        val gridWidth = 4 * button + 3 * dialSize + 6 * gap
 
         val dash = FrameLayout(c)
         dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
 
         // --- Coins hauts : poids à gauche, température à droite.
-        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 90)
-        dash.addView(weightMini, at(left, 0, 90, 90))
-        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 90)
-        dash.addView(tempMini, at(contentWidth - 90, 0, 90, 90))
+        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 140)
+        dash.addView(weightMini, FrameLayout.LayoutParams(Ui.u(140), Ui.u(140), Gravity.TOP or Gravity.START))
+        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 140)
+        dash.addView(
+            tempMini,
+            FrameLayout.LayoutParams(Ui.u(140), Ui.u(140), Gravity.TOP or Gravity.END).apply {
+                rightMargin = Ui.u(16)
+            },
+        )
 
-        // --- Les trois grands cadrans.
+        // --- Grille des cadrans et des commandes, d'une seule pièce pour que les colonnes
+        // restent alignées : une commande dans chaque creux, sous la ligne des − / +.
+        val grid = FrameLayout(c)
         timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED, size = dialSize)
         tempDial = Dial(c, Icon.Kind.THERMO, size = dialSize)
@@ -92,7 +96,12 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
-            dash.addView(dial, at(left + index * (dialSize + gap), 96, dialSize, dialSize + 100))
+            grid.addView(
+                dial,
+                FrameLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
+                    leftMargin = Ui.u(button + gap + index * period)
+                },
+            )
         }
 
         directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
@@ -106,22 +115,36 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }, onUp = { a.machine.turboUp() })
         val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
 
-        // --- Commandes sur les flancs, un peu sous la ligne des − / +.
-        val half = button / 2
-        val sideX = listOf(
-            left,
-            left + dialSize + gap / 2 - half,
-            left + 2 * dialSize + (gap + gap / 2) - half,
-            left + used - button,
-        )
+        val controlsTop = dialSize + 37 + 6
         val controls = listOf(weigh, directionToggle, accessoryToggle, turbo)
         for ((index, control) in controls.withIndex()) {
-            dash.addView(control, at(sideX[index], controlTop, button, 101))
+            grid.addView(
+                control,
+                FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP).apply {
+                    leftMargin = Ui.u(index * period)
+                    topMargin = Ui.u(controlsTop)
+                },
+            )
         }
+        dash.addView(
+            grid,
+            // Décalée à gauche : le bouton Démarrer occupe l'angle bas-droit et ne doit
+            // recouvrir aucune commande.
+            FrameLayout.LayoutParams(Ui.u(gridWidth), Ui.WRAP, Gravity.TOP or Gravity.START).apply {
+                topMargin = Ui.u(146)
+                leftMargin = Ui.u(24)
+            },
+        )
 
-        // --- Démarrer, seul dans le coin bas-droit.
+        // --- Démarrer, dans l'angle bas-droit.
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        dash.addView(startButton, at(contentWidth - 250, 492, 238, 64))
+        dash.addView(
+            startButton,
+            FrameLayout.LayoutParams(Ui.u(190), Ui.u(62), Gravity.BOTTOM or Gravity.END).apply {
+                rightMargin = Ui.u(16)
+                bottomMargin = Ui.u(8)
+            },
+        )
 
         // Message d'aide dans la bande haute, entre les deux mini-cadrans.
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
@@ -129,7 +152,14 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             setLineSpacing(0f, 1.05f)
             visibility = View.GONE
         }
-        dash.addView(hint, at(left + 100, 16, (used - 200).coerceAtLeast(200), 54))
+        dash.addView(
+            hint,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.u(90), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = Ui.u(150)
+                rightMargin = Ui.u(150)
+                topMargin = Ui.u(24)
+            },
+        )
 
         refresh()
         return dash

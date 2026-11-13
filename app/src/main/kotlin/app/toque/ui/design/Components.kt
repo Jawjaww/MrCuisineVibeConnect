@@ -745,10 +745,16 @@ class MiniCircle(
     private val bar = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
+        val iconSize = (size * 0.22f).toInt()
+        val barWidth = (size * 0.30f).toInt()
         val column = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
-        column.addView(icon, Ui.lp(Ui.u(20), Ui.u(20)))
-        column.addView(value, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
-        if (showBar) column.addView(bar, Ui.lp(Ui.u(26), Ui.u(3), t = 3))
+        column.addView(icon, Ui.lp(Ui.u(iconSize), Ui.u(iconSize)))
+        // Une seule ligne : sans largeur bornée, « 22 °C » se repliait hors du disque.
+        value.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.uf(size * 0.16f))
+        value.isSingleLine = true
+        value.gravity = Gravity.CENTER
+        column.addView(value, Ui.lp(Ui.u((size * 0.82f).toInt()), Ui.WRAP, t = 2))
+        if (showBar) column.addView(bar, Ui.lp(Ui.u(barWidth), Ui.u(3), t = 3))
         face.addView(column, FrameLayout.LayoutParams(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
         addView(face, FrameLayout.LayoutParams(Ui.u(size), Ui.u(size)))
     }
