@@ -1,9 +1,8 @@
 # Décor photographique Toque
 
-Le rendu est prêt à charger trois miniatures WebP nommées `basil.webp`,
-`tomatoes.webp` et `pepper.webp`. Tant que ces fichiers ne sont pas présents,
-Decor se replie sur le fond ivoire uni sans allocation bitmap.
+Trois miniatures WebP : `basil.webp`, `tomatoes.webp`, `pepper.webp`. Elles sont composées une
+seule fois dans un bitmap 1024×600 (RGB_565, ≈ 1,17 Mio) par `Decor.kt`, hors du thread principal,
+puis appliquées comme fond. En leur absence, le repli est un fond ivoire uni sans allocation.
 
-Les sources CC0 candidates sont documentées dans `docs/ASSETS-CREDITS.md`.
-Les fichiers finaux seront recadrés, réduits et recompressés à 60 Ko maximum
-chacun avant ajout.
+Origine, licence CC0 et transformation : voir `docs/ASSETS-CREDITS.md`.
+Budget contrôlé par les tests : 60 Ko par fichier, 180 Ko au total.
