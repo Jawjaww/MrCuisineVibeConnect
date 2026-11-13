@@ -6,23 +6,29 @@ attribution n'est exigée, elle est conservée ici par correction. Aucune image 
 
 | Fichier livré | Source d'origine | Auteur | Licence | Poids |
 |---|---|---|---|---|
-| `basil.webp` | [Sweet basil leaves.jpg](https://commons.wikimedia.org/wiki/File:Sweet_basil_leaves.jpg) | TheTechnician27 | CC0 1.0 | 52,8 Ko |
-| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 | 32,5 Ko |
-| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 | 53,5 Ko |
+| `basil.webp` | [Sweet basil leaves.jpg](https://commons.wikimedia.org/wiki/File:Sweet_basil_leaves.jpg) | TheTechnician27 | CC0 1.0 | 4,5 Ko |
+| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 | 3,6 Ko |
+| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 | 4,0 Ko |
 
-Total embarqué : **138,8 Ko** (budget fixé à 60 Ko par fichier et 180 Ko au total, contrôlé par
+Total embarqué : **12,2 Ko** (budget fixé à 60 Ko par fichier et 180 Ko au total, contrôlé par
 `DesignTest.decorativeAssetBudgetAndCredits`).
 
 ## Transformation appliquée
 
-Recadrage centré au format exact de la zone d'affichage définie dans `Decor.kt` (pour éviter toute
-déformation), redimensionnement à 560 px de large, conversion WebP qualité 82, méthode 6.
+1. recadrage centré au format exact de la zone d'affichage définie dans `Decor.kt` (aucune déformation) ;
+2. redimensionnement à 480 px de large ;
+3. **flou gaussien de rayon 14 appliqué à la conversion**, pas à l'exécution : le robot ne calcule
+   jamais de flou, le bokeh est figé dans le fichier ;
+4. conversion WebP, méthode 6.
 
-| Fichier | Zone d'affichage (unités 1024×600) | Format |
-|---|---|---|
-| `basil.webp` | `-28,-24 → 245,204` | 560×468 |
-| `tomatoes.webp` | `815,-28 → 1052,184` | 560×501 |
-| `pepper.webp` | `835,430 → 1048,620` | 560×500 |
+| Fichier | Zone d'affichage (unités 1024×600) | Format | Rendu |
+|---|---|---|---|
+| `basil.webp` | `-30,300 → 330,628` | 480×438 | bas gauche |
+| `tomatoes.webp` | `740,-40 → 1080,215` | 480×360 | haut droite |
+| `pepper.webp` | `830,350 → 1070,610` | 480×520 | bas droite |
 
-Les photographies sont composées **une seule fois** dans un bitmap RGB_565 de 1024×600, à 16 %
-d'opacité, uniquement dans les marges. Elles ne passent jamais sous un texte ni sous une commande.
+## Composition
+
+Les photographies sont dessinées à **59 % d'opacité**, puis recouvertes d'un **voile ivoire en
+dégradé radial** : opaque au centre (zone des cadrans, des valeurs et des libellés), transparent en
+périphérie. Les photos ne passent jamais sous une information sans ce voile.

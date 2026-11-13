@@ -22,8 +22,7 @@ import app.toque.ui.Ui
 import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
-import app.toque.ui.design.RoundButton
-import app.toque.ui.design.SurfaceCard
+import app.toque.ui.design.ToggleRoundButton
 import app.toque.ui.design.T
 import app.toque.ui.design.WeightBadge
 
@@ -40,10 +39,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var timeDial: Dial
     private lateinit var tempDial: Dial
     private lateinit var speedDial: Dial
-    private lateinit var normalButton: RoundButton
-    private lateinit var reverseButton: RoundButton
-    private lateinit var bladeButton: RoundButton
-    private lateinit var whiskButton: RoundButton
+    private lateinit var directionToggle: ToggleRoundButton
+    private lateinit var accessoryToggle: ToggleRoundButton
     private lateinit var weightBadge: WeightBadge
     private lateinit var startButton: PrimaryButton
     private lateinit var hint: TextView
@@ -59,62 +56,53 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        val root = Ui.horizontal(c, Gravity.TOP)
-        root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(16))
+        val root = Ui.vertical(c, Gravity.CENTER_VERTICAL)
+        root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(12))
 
-        val left = Ui.vertical(c)
+        val top = Ui.horizontal(c, Gravity.TOP)
         val dials = Ui.horizontal(c, Gravity.TOP)
         timeDial = Dial(c, Icon.Kind.CLOCK)
         tempDial = Dial(c, Icon.Kind.THERMO)
-        speedDial = Dial(c, Icon.Kind.SPEED)
+        // La vitesse reprend l'encadrement de la maquette : une icône au-dessus et au-dessous.
+        speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED)
         val all = listOf(timeDial, tempDial, speedDial)
         for ((index, dial) in all.withIndex()) {
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
             dial.onPlus = { change(index, 1) }
-            dials.addView(dial, LinearLayout.LayoutParams(0, Ui.WRAP, 1f).apply {
-                if (index < 2) rightMargin = Ui.u(16)
+            dials.addView(dial, LinearLayout.LayoutParams(Ui.u(Dial.SIZE), Ui.WRAP).apply {
+                if (index < 2) rightMargin = Ui.u(14)
             })
         }
-        left.addView(dials, LinearLayout.LayoutParams(Ui.MATCH, Ui.WRAP))
-
-        val options = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
-        normalButton = RoundButton(c, Icon.Kind.SYNC, tr("Sens normal")) { setReverse(false) }
-        reverseButton = RoundButton(c, Icon.Kind.REVERSE, tr("Inverse")) { setReverse(true) }
-        bladeButton = RoundButton(c, Icon.Kind.BLADE, tr("Lame")) { setAccessory(Accessory.BLADE) }
-        whiskButton = RoundButton(c, Icon.Kind.WHISK, tr("Fouet")) { setAccessory(Accessory.WHISK) }
-        val modes = listOf(normalButton, reverseButton, bladeButton, whiskButton)
-        for ((index, button) in modes.withIndex()) {
-            options.addView(button, LinearLayout.LayoutParams(0, Ui.WRAP, 1f).apply {
-                if (index < modes.lastIndex) rightMargin = Ui.u(8)
-            })
-        }
-        turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
-            a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
-        }, onUp = { a.machine.turboUp() })
-        options.addView(turbo, Ui.lp(Ui.u(88), Ui.u(104)))
-        // La maquette est pleine hauteur : le ressort se place AVANT les commandes pour les
-        // poser en bas, sur un écran de robot plus haut que large.
-        left.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
-        left.addView(options, Ui.lp(Ui.MATCH, Ui.WRAP, t = 12))
-
-        root.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { rightMargin = Ui.u(20) })
-
-        val right = SurfaceCard(c).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(Ui.u(14), Ui.u(12), Ui.u(14), Ui.u(14))
-        }
+        top.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
+        top.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         weightBadge = WeightBadge(c)
-        right.addView(weightBadge, Ui.lp(Ui.u(240), Ui.u(120)))
+        top.addView(weightBadge, Ui.lp(Ui.u(200), Ui.u(150)))
+        root.addView(top, Ui.lp(Ui.MATCH, Ui.WRAP))
+
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.05f)
         }
-        right.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
-        right.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 10))
+
+        val commands = Ui.horizontal(c, Gravity.CENTER_VERTICAL)
+        directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
+        directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
+        accessoryToggle = ToggleRoundButton(c) {
+            setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
+        }
+        accessoryToggle.configure(tr("Fouet"), Icon.Kind.WHISK, tr("Lame"), Icon.Kind.BLADE)
+        commands.addView(directionToggle, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+        commands.addView(accessoryToggle, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
+        turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
+            a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
+        }, onUp = { a.machine.turboUp() })
+        commands.addView(turbo, Ui.lp(Ui.WRAP, Ui.WRAP))
+        commands.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
-        right.addView(startButton, Ui.lp(Ui.MATCH, Ui.u(68), t = 10))
-        root.addView(right, LinearLayout.LayoutParams(Ui.u(276), Ui.MATCH))
+        commands.addView(startButton, Ui.lp(Ui.u(240), Ui.u(86)))
+        root.addView(commands, Ui.lp(Ui.MATCH, Ui.WRAP))
         refresh()
         return root
     }
@@ -239,7 +227,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }
     }
 
-    private fun tempValue(): String = if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel).toString() else "—"
+    private fun tempValue(): String = if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel).toString() else "0"
 
     private fun tempLegend(): String {
         val measured = if (hasSample) tr("Mesurée : %d °C", actualTemp) else tr("Mesure indisponible")
@@ -270,12 +258,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         timeDial.select(selected == 0)
         tempDial.select(selected == 1)
         speedDial.select(selected == 2)
-        normalButton.select(!reverse)
-        reverseButton.select(reverse)
-        bladeButton.select(accessory == Accessory.BLADE)
-        whiskButton.select(accessory == Accessory.WHISK)
-        bladeButton.setButtonEnabled(!live)
-        whiskButton.setButtonEnabled(!live)
+        directionToggle.set(reverse)
+        accessoryToggle.set(accessory == Accessory.WHISK)
+        accessoryToggle.setButtonEnabled(!live)
 
         val warnings = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
             .filter { it.code != SafetyPolicy.HOT_BLEND }
@@ -298,8 +283,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         timeDial.repeatEnabled = true
         tempDial.repeatEnabled = !live
         speedDial.repeatEnabled = !live
-        bladeButton.setButtonEnabled(!live)
-        whiskButton.setButtonEnabled(!live)
+        accessoryToggle.setButtonEnabled(!live)
 
         if (live && !pendingEdit) {
             val remaining = ((s.remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
