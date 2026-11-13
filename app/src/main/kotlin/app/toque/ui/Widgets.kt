@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.toque.core.i18n.tr
+import app.toque.ui.design.T
 
 /** Carte de réglage : libellé, grande valeur, boutons − / +, sélection pour le bouton rotatif. */
 class ValueCard(c: Context, label: String, icon: Icon.Kind) : LinearLayout(c) {
@@ -191,7 +192,7 @@ class HoldButton(c: Context, label: String, private val onDown: () -> Unit, priv
         when (e.action) {
             MotionEvent.ACTION_DOWN -> {
                 background = Ui.round(Ui.WARN, 32f)
-                text.setTextColor(0xFF1A1405.toInt())
+                text.setTextColor(T.SURFACE)
                 onDown()
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {

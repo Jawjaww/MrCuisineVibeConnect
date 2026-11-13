@@ -186,7 +186,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         val sw = Ui.text(c, "", 16f, Ui.TEXT, Ui.MEDIUM).apply { gravity = Gravity.CENTER }
         fun paint() {
             sw.text = if (state) tr("Oui") else tr("Non")
-            sw.setTextColor(if (state) 0xFF1A0E05.toInt() else Ui.TEXT2)
+            sw.setTextColor(if (state) Ui.SURFACE else Ui.TEXT2)
             sw.background = if (state) Ui.round(Ui.ACCENT, 24f) else Ui.round(Ui.SURFACE3, 24f)
         }
         paint()

@@ -17,24 +17,32 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import app.toque.ui.design.T
 
-/** Thème sombre et utilitaires de mise en page, à l'échelle d'un écran de référence 1024×600. */
+/** Façade de compatibilité Ui : les écrans existants consomment les nouveaux tokens. */
 object Ui {
-    const val BG = 0xFF0B0C0E.toInt()
-    const val SURFACE = 0xFF15171B.toInt()
-    const val SURFACE2 = 0xFF1E2127.toInt()
-    const val SURFACE3 = 0xFF272B32.toInt()
-    const val STROKE = 0xFF2C3038.toInt()
-    const val TEXT = 0xFFF3F4F6.toInt()
-    const val TEXT2 = 0xFF9BA1AA.toInt()
-    const val TEXT3 = 0xFF666C75.toInt()
-    const val ACCENT = 0xFFFF8A3D.toInt()
-    const val ACCENT_DIM = 0x33FF8A3D
-    const val COOL = 0xFF5CC8FF.toInt()
-    const val OK = 0xFF3DDC97.toInt()
-    const val WARN = 0xFFFFC14D.toInt()
-    const val DANGER = 0xFFFF5A5F.toInt()
-    const val SCRIM = 0xCC000000.toInt()
+    val BG = T.BG
+    val SURFACE = T.SURFACE
+    val SURFACE2 = T.SURFACE2
+    val SURFACE3 = T.SURFACE3
+    val STROKE = T.STROKE
+    val STROKE_STRONG = T.STROKE_STRONG
+    val TEXT = T.TEXT
+    val TEXT2 = T.TEXT2
+    val TEXT3 = T.TEXT3
+    val ACCENT = T.BRAND
+    val ACCENT_DIM = T.WASH_BRAND
+    val BRAND = T.BRAND
+    val BOTANICAL = T.BOTANICAL
+    val COOL = T.COOL
+    val OK = T.OK
+    val WARN = T.WARN
+    val DANGER = T.DANGER
+    val WARN_WASH = T.WARN_WASH
+    val DANGER_WASH = T.DANGER_WASH
+    val DISABLED_BG = T.DISABLED_BG
+    val DISABLED_TEXT = T.DISABLED_TEXT
+    val SCRIM = T.SCRIM
 
     val LIGHT: Typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
     val THIN: Typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
@@ -62,8 +70,8 @@ object Ui {
             if (strokeWidth > 0) setStroke(u(strokeWidth), strokeColor)
         }
 
-    fun pressable(base: Drawable, radius: Float, ripple: Int = 0x33FFFFFF): Drawable =
-        RippleDrawable(ColorStateList.valueOf(ripple), base, round(Color.WHITE, radius))
+    fun pressable(base: Drawable, radius: Float, ripple: Int = T.RIPPLE): Drawable =
+        RippleDrawable(ColorStateList.valueOf(ripple), base, round(SURFACE, radius))
 
     fun text(c: Context, s: CharSequence = "", size: Float = 18f, color: Int = TEXT, face: Typeface = REGULAR): TextView =
         TextView(c).apply {
@@ -131,16 +139,16 @@ object Ui {
     fun button(c: Context, label: String, style: Style = Style.SECONDARY, icon: Icon.Kind? = null,
                height: Int = 64, textSize: Float = 20f, onClick: (View) -> Unit): LinearLayout {
         val (bg, fg) = when (style) {
-            Style.PRIMARY -> ACCENT to 0xFF1A0E05.toInt()
+            Style.PRIMARY -> BRAND to SURFACE
             Style.SECONDARY -> SURFACE3 to TEXT
-            Style.DANGER -> DANGER to Color.WHITE
+            Style.DANGER -> DANGER to SURFACE
             Style.GHOST -> Color.TRANSPARENT to TEXT2
-            Style.COOL -> COOL to 0xFF04131C.toInt()
+            Style.COOL -> COOL to SURFACE
         }
         val row = horizontal(c, Gravity.CENTER)
         row.minimumHeight = u(height)
         row.setPadding(u(22), 0, u(22), 0)
-        val base = if (style == Style.GHOST) round(Color.TRANSPARENT, height / 2f, STROKE, 1.5f) else round(bg, height / 2f)
+        val base = if (style == Style.GHOST) round(Color.TRANSPARENT, height / 2f, STROKE_STRONG, 1.5f) else round(bg, height / 2f)
         row.background = pressable(base, height / 2f)
         if (icon != null) {
             row.addView(Icon(c, icon, fg), LinearLayout.LayoutParams(u(textSize * 1.3f), u(textSize * 1.3f)).apply {
@@ -173,15 +181,15 @@ object Ui {
 
     /** Puce sélectionnable (filtres, choix). */
     fun toggleChip(c: Context, label: String, selected: Boolean, onClick: () -> Unit): TextView {
-        val t = text(c, label, 17f, if (selected) 0xFF1A0E05.toInt() else TEXT, MEDIUM)
+        val t = text(c, label, 17f, if (selected) SURFACE else TEXT, MEDIUM)
         t.setPadding(u(18), u(10), u(18), u(10))
-        t.background = pressable(if (selected) round(ACCENT, 40f) else round(SURFACE2, 40f, STROKE, 1f), 40f)
+        t.background = pressable(if (selected) round(BRAND, 40f) else round(SURFACE2, 40f, STROKE, 1f), 40f)
         t.isClickable = true
         t.setOnClickListener { onClick() }
         return t
     }
 
-    fun card(c: Context, radius: Float = 24f, color: Int = SURFACE): LinearLayout = vertical(c).apply {
+    fun card(c: Context, radius: Float = T.Radius.CARD, color: Int = SURFACE): LinearLayout = vertical(c).apply {
         background = round(color, radius)
         setPadding(u(20), u(18), u(20), u(18))
     }
@@ -201,7 +209,7 @@ object Ui {
     /** Couleur liée à une température : froid -> bleu, tiède -> orange, chaud -> rouge. */
     fun tempColor(c: Int): Int = when {
         c >= 90 -> DANGER
-        c >= 60 -> ACCENT
+        c >= 60 -> WARN
         c >= 40 -> WARN
         else -> COOL
     }
