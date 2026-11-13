@@ -65,13 +65,20 @@ class DesignTest {
     @Test fun decorativeAssetBudgetAndCredits() {
         val decor = File("../app/src/main/assets/decor")
         val credits = File("../docs/ASSETS-CREDITS.md")
-        // Le fond se replie volontairement sur l'ivoire tant que les miniatures ne sont pas livrées.
-        if (!decor.exists()) return
         assertTrue("docs/ASSETS-CREDITS.md manquant", credits.isFile)
-        val images = decor.listFiles()!!.filter { it.isFile && it.extension.lowercase() in setOf("webp", "jpg", "jpeg", "png") }
+        val images = if (decor.isDirectory) {
+            decor.listFiles()!!.filter { it.isFile && it.extension.lowercase() in setOf("webp", "jpg", "jpeg", "png") }
+        } else {
+            emptyList()
+        }
         val bytes = images.sumOf { it.length() }
         assertTrue("Budget décor dépassé : " + bytes + " octets", bytes <= 180_000L)
         val documentation = credits.readText()
-        for (image in images) assertTrue("Crédit manquant pour " + image.name, documentation.contains(image.name))
+        for (image in images) {
+            assertTrue("Crédit manquant pour " + image.name, documentation.contains(image.name))
+            assertTrue("Image trop lourde : " + image.name, image.length() <= 60_000L)
+        }
+        // Un jeu partiel n'a pas de sens : les trois zones du décor ou aucune.
+        assertTrue("Jeu de décor incomplet : " + images.joinToString { it.name }, images.isEmpty() || images.size == 3)
     }
 }
