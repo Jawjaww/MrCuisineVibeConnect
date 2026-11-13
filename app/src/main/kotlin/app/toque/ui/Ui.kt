@@ -19,7 +19,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import app.toque.ui.design.T
 import app.toque.ui.design.Focusable
-import app.toque.ui.design.Focusable
 
 /** Façade de compatibilité Ui : les écrans existants consomment les nouveaux tokens. */
 object Ui {
