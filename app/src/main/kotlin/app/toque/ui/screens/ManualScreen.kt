@@ -66,10 +66,11 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // la fenêtre réelle est plus étroite que l'écran quand il y a une encoche.
         val button = 96
         val gap = 6
-        val avail = (Ui.widthUnits - 32f).toInt()
-        dialSize = ((avail - 4 * button - 6 * gap) / 3).coerceIn(150, 220)
-        val period = button + dialSize + 2 * gap
-        val gridWidth = 4 * button + 3 * dialSize + 6 * gap
+        // Plafonds mesurés : 365 par la hauteur (mini-cadrans + − / + + commandes),
+        // 421 par la largeur. On retient 300, le plus grand qui laisse Démarrer dans son angle.
+        dialSize = 300
+        val groupWidth = 3 * dialSize + 2 * gap
+        val period = (groupWidth - button) / 3
 
         val dash = FrameLayout(c)
         dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
@@ -99,7 +100,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             grid.addView(
                 dial,
                 FrameLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
-                    leftMargin = Ui.u(button + gap + index * period)
+                    leftMargin = Ui.u(index * (dialSize + gap))
                 },
             )
         }
@@ -115,7 +116,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }, onUp = { a.machine.turboUp() })
         val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
 
-        val controlsTop = dialSize + 37 + 6
+        val controlsTop = dialSize + 37 + 4
         val controls = listOf(weigh, directionToggle, accessoryToggle, turbo)
         for ((index, control) in controls.withIndex()) {
             grid.addView(
@@ -130,9 +131,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             grid,
             // Décalée à gauche : le bouton Démarrer occupe l'angle bas-droit et ne doit
             // recouvrir aucune commande.
-            FrameLayout.LayoutParams(Ui.u(gridWidth), Ui.WRAP, Gravity.TOP or Gravity.START).apply {
-                topMargin = Ui.u(146)
-                leftMargin = Ui.u(24)
+            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = Ui.u(0)
             },
         )
 
@@ -140,9 +140,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         startButton = PrimaryButton(c, tr("Démarrer")) { start() }
         dash.addView(
             startButton,
-            FrameLayout.LayoutParams(Ui.u(190), Ui.u(62), Gravity.BOTTOM or Gravity.END).apply {
+            FrameLayout.LayoutParams(Ui.u(190), Ui.u(56), Gravity.BOTTOM or Gravity.END).apply {
                 rightMargin = Ui.u(16)
-                bottomMargin = Ui.u(8)
+                bottomMargin = Ui.u(6)
             },
         )
 

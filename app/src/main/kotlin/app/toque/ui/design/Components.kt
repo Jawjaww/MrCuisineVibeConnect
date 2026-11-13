@@ -351,8 +351,10 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = 55, castShadow = true, shadowAlpha = 30) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = 55, castShadow = true, shadowAlpha = 30) { onSelect(); onPlus() }
+    // Les − / + suivent la taille du cadran, sinon ils paraissent minuscules sur un grand disque.
+    private val stepper = (size * 0.21f).toInt().coerceIn(48, 88)
+    private val minus = RoundButton(context, Icon.Kind.MINUS, size = stepper, castShadow = true, shadowAlpha = 30) { onSelect(); onMinus() }
+    private val plus = RoundButton(context, Icon.Kind.PLUS, size = stepper, castShadow = true, shadowAlpha = 30) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -362,6 +364,9 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
+        // Icônes proportionnelles au disque : fixes, elles paraissaient perdues sur un grand cadran.
+        val iconSize = (size * 0.11f).toInt().coerceIn(20, 46)
+        val iconMargin = (size * 0.09f).toInt()
         // L'icône de dessous n'a de place que sur un grand cadran ; sinon elle chevauche la légende.
         val showBottom = bottomIcon != null && size >= 240
         face.hasBottomIcon = showBottom
@@ -369,12 +374,12 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         box.addView(face, Ui.flp(Ui.u(size), Ui.u(size)))
         box.addView(
             Icon(context, topIcon, T.TEXT),
-            Ui.flp(Ui.u(34), Ui.u(34), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(30) },
+            Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(iconMargin) },
         )
         if (showBottom) {
             box.addView(
                 Icon(context, bottomIcon!!, T.TEXT),
-                Ui.flp(Ui.u(34), Ui.u(34), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(30) },
+                Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(iconMargin) },
             )
         }
         addView(box, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
@@ -548,15 +553,17 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private fun drawValue(canvas: Canvas, cx: Float, cy: Float, size: Float) {
             valuePaint.color = T.TEXT
             valuePaint.typeface = mediumTypeface
-            valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE)
-            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(T.Type.DIAL_VALUE * 0.7f)
+            val discRadius = size * 0.425f
+            val baseValue = maxOf(T.Type.DIAL_VALUE, discRadius * 0.46f)
+            valuePaint.textSize = Ui.uf(baseValue)
+            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(baseValue * 0.7f)
             val available = size * 0.62f
-            while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(36f)) {
+            while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(baseValue * 0.6f)) {
                 valuePaint.textSize -= Ui.uf(2f)
             }
             unitPaint.color = T.TEXT2
             unitPaint.typeface = regularTypeface
-            unitPaint.textSize = Ui.uf(T.Type.DIAL_UNIT)
+            unitPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_UNIT, discRadius * 0.16f))
             val valueWidth = valuePaint.measureText(value)
             val unitWidth = unitPaint.measureText(unit)
             val gap = if (unit.isEmpty()) 0f else Ui.uf(5f)
@@ -570,7 +577,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             if (legend.isEmpty()) return
             legendPaint.color = T.TEXT2
             legendPaint.typeface = mediumTypeface
-            legendPaint.textSize = Ui.uf(T.Type.DIAL_LEGEND)
+            legendPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_LEGEND, size * 0.425f * 0.10f))
             val maxWidth = size * 0.66f
             val lines = if (hasBottomIcon) listOf(fit(legend, maxWidth, legendPaint)) else wrapLegend(legend, maxWidth, legendPaint)
             var y = cy + Ui.uf(if (hasBottomIcon) 42f else 46f)
