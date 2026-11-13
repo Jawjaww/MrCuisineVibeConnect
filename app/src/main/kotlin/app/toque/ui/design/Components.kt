@@ -20,6 +20,8 @@ import android.widget.TextView
 import app.toque.core.i18n.tr
 import app.toque.ui.Icon
 import app.toque.ui.Ui
+import kotlin.math.exp
+import kotlin.math.sqrt
 
 /** Fabrique les états focus, sélection et appui sans dépendre du focus blanc par défaut d'Android. */
 object Focusable {
@@ -30,6 +32,7 @@ object Focusable {
         pressed: Int = T.SURFACE3,
         selected: Int? = null,
         focusStroke: Int = T.BRAND,
+        hairline: Float = T.Line.HAIR,
     ) {
         val drawable = StateListDrawable()
         if (selected != null) {
@@ -43,8 +46,8 @@ object Focusable {
             )
         }
         drawable.addState(intArrayOf(android.R.attr.state_focused), Ui.round(normal, radius, focusStroke, T.Line.FOCUS))
-        drawable.addState(intArrayOf(android.R.attr.state_pressed), Ui.round(pressed, radius, T.STROKE, T.Line.HAIR))
-        drawable.addState(intArrayOf(), Ui.round(normal, radius, T.STROKE, T.Line.HAIR))
+        drawable.addState(intArrayOf(android.R.attr.state_pressed), Ui.round(pressed, radius, T.STROKE, hairline))
+        drawable.addState(intArrayOf(), Ui.round(normal, radius, T.STROKE, hairline))
         view.background = drawable
         view.isFocusable = true
     }
@@ -66,28 +69,59 @@ object Focusable {
 }
 
 /**
- * Ombre douce sans flou : des cercles concentriques à très faible alpha, cumulés de l'extérieur
- * vers l'intérieur. Le dégradé radial produisait un anneau dur au bord du disque ; ici la densité
- * décroît linéairement vers l'extérieur, comme une vraie ombre portée.
+ * Pénombre calculée au pixel, une seule fois, puis mise en cache. Un profil gaussien donne une
+ * décroissance continue : contrairement à des cercles empilés, aucune bande n'est visible, et
+ * rien n'est recalculé par image.
  */
-object Shadow {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
+object ShadowLayer {
+    private val cache = HashMap<Long, Bitmap>()
 
-    fun draw(canvas: Canvas, cx: Float, cy: Float, radius: Float, spread: Float, alpha: Int, offsetY: Float = 0f) {
-        if (radius <= 0f) return
-        val steps = 14
-        paint.alpha = alpha
-        for (i in steps downTo 1) {
-            canvas.drawCircle(cx, cy + offsetY, radius + spread * i / steps, paint)
+    fun circle(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap {
+        require(diameterPx > 0)
+        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong()
+        cache[key]?.let { return it }
+        val side = diameterPx + 2 * spreadPx
+        val pixels = IntArray(side * side)
+        val r = diameterPx / 2f
+        val c = side / 2f
+        val falloff = (spreadPx * 0.52f).coerceAtLeast(1f)
+        for (y in 0 until side) {
+            val dy = y - c
+            for (x in 0 until side) {
+                val dx = x - c
+                val d = sqrt(dx * dx + dy * dy)
+                val a = if (d <= r) {
+                    maxAlpha
+                } else {
+                    val t = (d - r) / falloff
+                    (maxAlpha * exp(-(t * t))).toInt()
+                }
+                pixels[y * side + x] = a.coerceIn(0, 255) shl 24
+            }
         }
+        val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, side, 0, 0, side, side)
+        cache[key] = bitmap
+        return bitmap
     }
 }
 
-/** Disque avec ombre douce, dessinée avant le fond : aucun flou, coût constant. */
-class SoftCircle(context: Context, private val spread: Int = 7, private val alpha: Int = 5) : FrameLayout(context) {
+/** Disque blanc avec sa pénombre, dessinée avant le fond. */
+class SoftCircle(context: Context, private val spread: Int = 7, private val alpha: Int = 46) : FrameLayout(context) {
+    private var shadow: Bitmap? = null
+    private var shadowSpread = 0
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        shadowSpread = Ui.u(spread)
+        shadow = try {
+            ShadowLayer.circle(minOf(w, h), shadowSpread, alpha)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     override fun draw(canvas: Canvas) {
-        val radius = minOf(width, height) / 2f
-        Shadow.draw(canvas, width / 2f, height / 2f, radius, Ui.uf(spread.toFloat()), alpha, Ui.uf(2f))
+        shadow?.let { canvas.drawBitmap(it, -shadowSpread.toFloat(), -shadowSpread + Ui.uf(2f), null) }
         super.draw(canvas)
     }
 }
@@ -109,15 +143,15 @@ class RoundButton(
     size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context, spread = if (size < 60) 4 else 7, alpha = if (size < 60) 3 else 4)
-    private val icon = Icon(context, iconKind, T.TEXT)
-    private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT2) else null
+    private val circle = SoftCircle(context, spread = if (size < 60) 5 else 8, alpha = if (size < 60) 46 else 56)
+    private val icon = Icon(context, iconKind, T.BRAND)
+    private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(if (size < 60) 18 else 26), Ui.u(if (size < 60) 18 else 26), Gravity.CENTER))
-        Focusable.states(circle, size / 2f, selected = T.BRAND)
+        Focusable.states(circle, size / 2f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.contentDescription = label
         circle.setOnClickListener { if (isEnabled) action() }
         addView(circle, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
@@ -129,7 +163,7 @@ class RoundButton(
 
     fun select(selected: Boolean) {
         circle.isSelected = selected
-        icon.color = if (selected) T.SURFACE else T.TEXT
+        icon.color = if (selected) T.SURFACE else T.BRAND
         caption?.setTextColor(if (selected) T.BRAND else T.TEXT2)
     }
 
@@ -151,9 +185,9 @@ class ToggleRoundButton(
     size: Int = 62,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context)
-    private val icon = Icon(context, Icon.Kind.SYNC, T.TEXT)
-    private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT2, Ui.MEDIUM)
+    private val circle = SoftCircle(context, spread = 8, alpha = 56)
+    private val icon = Icon(context, Icon.Kind.SYNC, T.BRAND)
+    private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var on = false
     private var onKind = Icon.Kind.SYNC
     private var offKind = Icon.Kind.REVERSE
@@ -164,7 +198,7 @@ class ToggleRoundButton(
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
-        Focusable.states(circle, size / 2f, selected = T.BRAND)
+        Focusable.states(circle, size / 2f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -206,7 +240,7 @@ class ToggleRoundButton(
         icon.set(if (on) onKind else offKind)
         caption.text = if (on) onLabel else offLabel
         circle.isSelected = on
-        icon.color = if (on) T.SURFACE else T.TEXT
+        icon.color = if (on) T.SURFACE else T.BRAND
         caption.setTextColor(if (on) T.BRAND else T.TEXT2)
         circle.contentDescription = caption.text
     }
@@ -336,7 +370,15 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             val radius = size * 0.42f
             val arcRadius = radius - Ui.uf(3f)
 
-            // Couche figée : ombre, disque, graduations. Redessinée uniquement si la taille change.
+            // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
+            val shadowBitmap = ShadowLayer.circle((2 * radius).toInt(), Ui.u(16), 66)
+            canvas.drawBitmap(
+                shadowBitmap,
+                cx - shadowBitmap.width / 2f,
+                cy + Ui.uf(4f) - shadowBitmap.height / 2f,
+                null,
+            )
+            // Couche figée : disque et graduations. Redessinée uniquement si la taille change.
             val layer = staticLayer ?: buildLayer(size, cx, cy, radius, arcRadius).also { staticLayer = it }
             canvas.drawBitmap(layer, 0f, 0f, null)
 
@@ -372,8 +414,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private fun buildLayer(size: Float, cx: Float, cy: Float, radius: Float, arcRadius: Float): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            Shadow.draw(canvas, cx, cy, radius, Ui.uf(14f), 5, Ui.uf(4f))
-            discPaint.color = T.SURFACE
+
+            discPaint.color = T.BUTTON_FACE
             discPaint.style = Paint.Style.FILL
             canvas.drawCircle(cx, cy, radius, discPaint)
 
@@ -454,7 +496,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
 
     companion object {
         /** Diamètre du cadran, en unités de la grille 1024×600. */
-        const val SIZE = 248
+        const val SIZE = 300
 
         private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
     }
@@ -498,16 +540,16 @@ class HoldRoundButton(
     private val onDown: () -> Unit,
     private val onUp: () -> Unit,
 ) : LinearLayout(context) {
-    private val circle = SoftCircle(context)
+    private val circle = SoftCircle(context, spread = 8, alpha = 56)
     private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
-    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT2, Ui.MEDIUM)
+    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var held = false
 
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         circle.addView(icon, Ui.flp(Ui.u(26), Ui.u(26), Gravity.CENTER))
-        Focusable.states(circle, 31f, selected = T.BRAND)
+        Focusable.states(circle, 31f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -524,7 +566,7 @@ class HoldRoundButton(
                         held = false
                         view.isPressed = false
                         icon.color = T.BRAND
-                        Focusable.states(circle, 31f, selected = T.BRAND)
+                        Focusable.states(circle, 31f, normal = T.BUTTON_FACE, pressed = T.SURFACE2, selected = T.BRAND, hairline = 0f)
                         onUp()
                     }
                 }

@@ -6,11 +6,11 @@ attribution n'est exigée, elle est conservée ici par correction. Aucune image 
 
 | Fichier livré | Source d'origine | Auteur | Licence | Poids |
 |---|---|---|---|---|
-| `basil.webp` | [Sweet basil leaves.jpg](https://commons.wikimedia.org/wiki/File:Sweet_basil_leaves.jpg) | TheTechnician27 | CC0 1.0 | 16,9 Ko |
-| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 | 14,7 Ko |
-| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 | 18,1 Ko |
+| `basil.webp` | [Sweet basil leaves.jpg](https://commons.wikimedia.org/wiki/File:Sweet_basil_leaves.jpg) | TheTechnician27 | CC0 1.0 | 10,8 Ko |
+| `tomatoes.webp` | [Fresh Tomatoes and pepper.jpg](https://commons.wikimedia.org/wiki/File:Fresh_Tomatoes_and_pepper.jpg) | Eunice Ameh | CC0 1.0 | 9,0 Ko |
+| `pepper.webp` | [Tellicherry Black Peppercorns.jpg](https://commons.wikimedia.org/wiki/File:Tellicherry_Black_Peppercorns.jpg) | Misterneedlemouse | CC0 1.0 | 11,6 Ko |
 
-Total embarqué : **49,7 Ko** (budget fixé à 60 Ko par fichier et 180 Ko au total, contrôlé par
+Total embarqué : **31,4 Ko** (budget fixé à 60 Ko par fichier et 180 Ko au total, contrôlé par
 `DesignTest.decorativeAssetBudgetAndCredits`).
 
 ## Transformation appliquée
@@ -19,7 +19,7 @@ Total embarqué : **49,7 Ko** (budget fixé à 60 Ko par fichier et 180 Ko au to
 2. redimensionnement à 480 px de large ;
 3. **flou gaussien de rayon 14 appliqué à la conversion**, pas à l'exécution : le robot ne calcule
    jamais de flou, le bokeh est figé dans le fichier ;
-3bis. **fondu alpha cuit dans le fichier** (dégradé radial jusqu'à alpha 0 sur les bords) : plus
+3bis. **fondu alpha elliptique cuit dans le fichier** (alpha 0 exactement sur les bords) : plus
    aucun masque n'est appliqué au rendu, donc aucun raccord rectangulaire ne peut apparaître ;
 4. conversion WebP, méthode 6.
 

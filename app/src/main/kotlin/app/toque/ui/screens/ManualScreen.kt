@@ -24,7 +24,6 @@ import app.toque.ui.design.HoldRoundButton
 import app.toque.ui.design.PrimaryButton
 import app.toque.ui.design.ToggleRoundButton
 import app.toque.ui.design.T
-import app.toque.ui.design.WeightBadge
 
 /** Cuisson manuelle : nouvelle présentation, logique moteur et politique de sécurité inchangées. */
 class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? = null) : Screen(a) {
@@ -41,7 +40,6 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var speedDial: Dial
     private lateinit var directionToggle: ToggleRoundButton
     private lateinit var accessoryToggle: ToggleRoundButton
-    private lateinit var weightBadge: WeightBadge
     private lateinit var startButton: PrimaryButton
     private lateinit var hint: TextView
     private lateinit var turbo: HoldRoundButton
@@ -59,13 +57,13 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         val root = Ui.vertical(c, Gravity.CENTER_VERTICAL)
         root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(12))
 
-        val top = Ui.horizontal(c, Gravity.TOP)
-        val dials = Ui.horizontal(c, Gravity.TOP)
+        val dials = Ui.horizontal(c, Gravity.CENTER_HORIZONTAL or Gravity.TOP)
         timeDial = Dial(c, Icon.Kind.CLOCK)
-        tempDial = Dial(c, Icon.Kind.THERMO)
-        // La vitesse reprend l'encadrement de la maquette : une icône au-dessus et au-dessous.
+        // La vitesse occupe le centre, le thermomètre va à droite : ce sont les trois éléments
+        // principaux de l'écran, ils prennent toute la largeur.
         speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED)
-        val all = listOf(timeDial, tempDial, speedDial)
+        tempDial = Dial(c, Icon.Kind.THERMO)
+        val all = listOf(timeDial, speedDial, tempDial)
         for ((index, dial) in all.withIndex()) {
             dial.onSelect = { selected = index; refresh() }
             dial.onMinus = { change(index, -1) }
@@ -74,11 +72,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
                 if (index < 2) rightMargin = Ui.u(14)
             })
         }
-        top.addView(dials, Ui.lp(Ui.WRAP, Ui.WRAP))
-        top.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
-        weightBadge = WeightBadge(c)
-        top.addView(weightBadge, Ui.lp(Ui.u(200), Ui.u(150)))
-        root.addView(top, Ui.lp(Ui.MATCH, Ui.WRAP))
+        root.addView(dials, Ui.lp(Ui.MATCH, Ui.WRAP))
 
         hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
             gravity = Gravity.CENTER
@@ -110,6 +104,12 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
     private val tempSteps: IntArray get() = intArrayOf(0) + (1..19).toList().toIntArray()
 
+    private companion object {
+        const val DIAL_TIME = 0
+        const val DIAL_SPEED = 1
+        const val DIAL_TEMP = 2
+    }
+
     private fun nextSeconds(s: Int, dir: Int): Int {
         val step = when {
             dir > 0 && s < 60 || dir < 0 && s <= 60 -> 5
@@ -123,8 +123,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private fun change(card: Int, dir: Int) {
         val snapshot = a.snapshot
         when (card) {
-            0 -> seconds = nextSeconds(seconds, dir)
-            1 -> {
+            DIAL_TIME -> seconds = nextSeconds(seconds, dir)
+            DIAL_TEMP -> {
                 val index = tempSteps.indexOf(tempLevel).coerceAtLeast(0)
                 tempLevel = tempSteps[(index + dir).coerceIn(0, tempSteps.size - 1)]
                 if (tempLevel > 0 && speed > Limits.MAX_SPEED_HEATED) {
@@ -132,7 +132,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
                     a.toast(tr("En chauffe, vitesse %d maximum", Limits.MAX_SPEED_HEATED))
                 }
             }
-            2 -> {
+            DIAL_SPEED -> {
                 var max = 10
                 var why = trKey("Vitesse %d maximum")
                 if (tempLevel > 0) { max = Limits.MAX_SPEED_HEATED; why = trKey("En chauffe, vitesse %d maximum") }
@@ -146,7 +146,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         if (seconds > maxSeconds) seconds = maxSeconds
         refresh()
         if (live && snapshot.kind?.name == "MANUAL") {
-            if (card == 0) timeEdited = true
+            if (card == DIAL_TIME) timeEdited = true
             pendingEdit = true
             view.removeCallbacks(pushLive)
             view.postDelayed(pushLive, 350)
@@ -256,9 +256,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (a.snapshot.speedLevel > 0) (a.snapshot.speedLevel / 10f).coerceIn(0f, 1f) else null)
 
-        timeDial.select(selected == 0)
-        tempDial.select(selected == 1)
-        speedDial.select(selected == 2)
+        timeDial.select(selected == DIAL_TIME)
+        speedDial.select(selected == DIAL_SPEED)
+        tempDial.select(selected == DIAL_TEMP)
         directionToggle.set(reverse)
         accessoryToggle.set(accessory == Accessory.WHISK)
         accessoryToggle.setButtonEnabled(!live)
@@ -276,7 +276,6 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
         speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
             if (s.speedLevel > 0) (s.speedLevel / 10f).coerceIn(0f, 1f) else null)
-        weightBadge.set(s.weightG, s.hasSample)
 
         val manualJob = s.kind?.name == "MANUAL" &&
             (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)

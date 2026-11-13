@@ -32,6 +32,7 @@ object T {
     val WARN_WASH = Palette.WARN_WASH
     val DISABLED_BG = Palette.DISABLED_BG
     val DISABLED_TEXT = Palette.DISABLED_TEXT
+    val BUTTON_FACE = Palette.BUTTON_FACE
     val BAR = Palette.BAR
     val RIPPLE = Palette.RIPPLE
     val SCRIM = Palette.SCRIM
@@ -47,7 +48,7 @@ object T {
         const val SMALL = 16f
         const val MICRO = 15f
         const val CAPTION = 13f
-        const val DIAL_VALUE = 60f
+        const val DIAL_VALUE = 64f
         const val DIAL_UNIT = 22f
         const val DIAL_LEGEND = 15f
     }

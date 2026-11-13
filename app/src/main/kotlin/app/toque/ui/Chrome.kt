@@ -42,6 +42,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
     private val temp = Ui.chip(a, "", Icon.Kind.THERMO, Ui.TEXT2, Ui.SURFACE)
     private val lid = Ui.chip(a, tr("Couvercle ouvert"), Icon.Kind.LID, Ui.WARN, Ui.WARN_WASH)
     private val link = Ui.chip(a, "", Icon.Kind.LINK, Ui.TEXT2, Ui.SURFACE)
+    private val weight = Ui.chip(a, "", Icon.Kind.SCALE, Ui.TEXT2, Ui.SURFACE)
     private val brand = Ui.horizontal(a, Gravity.CENTER)
     private val clock = Ui.text(a, "", 22f, Ui.TEXT, Ui.LIGHT).apply { Ui.focusable(this, 18f, normal = Ui.BG, pressed = Ui.SURFACE3) }
     private val home = Icon(a, Icon.Kind.HOME, Ui.TEXT2)
@@ -82,7 +83,8 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
         val right = Ui.horizontal(a, Gravity.END or Gravity.CENTER_VERTICAL)
         right.addView(lid, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
         right.addView(temp, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
-        right.addView(link, Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
+        right.addView(link, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
+        right.addView(weight, Ui.lp(Ui.WRAP, Ui.WRAP, r = 12))
         right.addView(separator(), LayoutParams(Ui.u(1), Ui.u(26)).apply { rightMargin = Ui.u(12) })
         right.addView(clock, Ui.lp(Ui.WRAP, Ui.WRAP, r = 6))
         home.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
@@ -93,6 +95,7 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
 
         lid.visibility = View.GONE
         temp.visibility = View.GONE
+        weight.visibility = View.GONE
         // Accès caché aux réglages Android : 5 appuis rapides sur l'heure.
         clock.setOnClickListener {
             val now = System.currentTimeMillis()
@@ -130,6 +133,8 @@ class TopBar(private val a: MainActivity) : LinearLayout(a) {
             Ui.chipText(temp).setTextColor(col)
             (temp.getChildAt(0) as Icon).color = col
         } else temp.visibility = View.GONE
+        weight.visibility = if (s.hasSample) View.VISIBLE else View.GONE
+        Ui.chipText(weight).text = tr("Balance : %d g", s.weightG)
         val demo = a.prefs.mode == Prefs.Mode.DEMO
         val (label, color) = when {
             s.hasFault -> tr("Alerte") to Ui.DANGER

@@ -31,6 +31,8 @@ object Palette {
     val WARN_WASH = 0xFFFBF0DC.toInt()
     val DISABLED_BG = 0xFFEDE5D8.toInt()
     val DISABLED_TEXT = 0xFFA79C88.toInt()
+    /** Face des boutons secondaires : blanc franc, seule la pénombre le détache de l'ivoire. */
+    val BUTTON_FACE = 0xFFFFFFFF.toInt()
     /** Ivoire légèrement translucide : laisse vivre le décor derrière la barre haute. */
     val BAR = 0xEBF8F1EA.toInt()
     val RIPPLE = 0x14000000
