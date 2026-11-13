@@ -191,10 +191,6 @@ class MainActivity : Activity() {
         val v = s.view
         (v.parent as? FrameLayout)?.removeView(v)
         content.addView(v, Ui.flp())
-        // Le premier contrôle reçoit le focus initial ; les flèches restent ensuite au système Android.
-        v.post {
-            if (!v.hasFocus()) v.getFocusables(View.FOCUS_FORWARD).firstOrNull()?.requestFocus()
-        }
         topBar.setTitle(s.title, stack.size > 1)
         s.onShow()
         s.onSnapshot(snapshot)
