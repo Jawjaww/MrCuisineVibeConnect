@@ -67,6 +67,9 @@ class ProgramsScreen(a: MainActivity) : Screen(a) {
                 a.startJob(p.make(p.seconds * 1000L))
             }
             card.addView(p.start, Ui.lp(t = 14))
+            Ui.focusable(card, 26f, normal = Ui.SURFACE, pressed = Ui.SURFACE3, selected = Ui.BRAND)
+            card.isSelected = i == selected
+            card.setOnFocusChangeListener { _, focused -> if (focused) { selected = i; refresh() } }
             card.isClickable = true
             card.setOnClickListener { selected = i; refresh() }
             row.addView(card, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { if (i < progs.size - 1) rightMargin = Ui.u(16) })
@@ -93,7 +96,8 @@ class ProgramsScreen(a: MainActivity) : Screen(a) {
     private fun refresh() {
         for ((i, p) in progs.withIndex()) {
             p.value.text = Ui.duration(p.seconds)
-            p.card.background = Ui.round(Ui.SURFACE, 26f, if (i == selected) Ui.ACCENT else Ui.STROKE, if (i == selected) 2.5f else 1f)
+            p.card.isSelected = i == selected
+            Ui.focusable(p.card, 26f, normal = Ui.SURFACE, pressed = Ui.SURFACE3, selected = Ui.BRAND)
         }
     }
 

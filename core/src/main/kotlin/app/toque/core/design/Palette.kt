@@ -1,0 +1,61 @@
+package app.toque.core.design
+
+/** Palette sémantique Ivoire & Vert botanique, testable sans Android. */
+object Palette {
+    val BG = 0xFFF8F1EA.toInt()
+    val SURFACE = 0xFFFAF5F0.toInt()
+    val SURFACE2 = 0xFFF5EEE7.toInt()
+    val SURFACE3 = 0xFFEDE4DC.toInt()
+    val STROKE = 0xFFE3D9CB.toInt()
+    val STROKE_STRONG = 0xFF8A7C66.toInt()
+    val TEXT = 0xFF172D2C.toInt()
+    val TEXT2 = 0xFF566056.toInt()
+    val TEXT3 = 0xFF5A6359.toInt()
+    val BRAND = 0xFF37562E.toInt()
+    val BRAND_PRESSED = 0xFF2C4525.toInt()
+    val BOTANICAL = 0xFF559514.toInt()
+    /** Piste de l'arc des cadrans et graduations intérieures. */
+    val ARC_TRACK = 0xFFDED8CE.toInt()
+    val TICK = 0xFFCFC7BC.toInt()
+    /** Dégradé du bouton principal, du vert jaune au vert forêt. */
+    val START_TOP = 0xFF5A9620.toInt()
+    val START_BOTTOM = 0xFF2D5E3E.toInt()
+    val START_TOP_PRESSED = 0xFF4C8019.toInt()
+    val START_BOTTOM_PRESSED = 0xFF244C32.toInt()
+    val WASH_BRAND = 0xFFE7EDDD.toInt()
+    val OK = 0xFF2E6B3E.toInt()
+    val WARN = 0xFF8A5A00.toInt()
+    val DANGER = 0xFFA8322A.toInt()
+    val COOL = 0xFF1F5F7A.toInt()
+    val DANGER_WASH = 0xFFFBE9E7.toInt()
+    val WARN_WASH = 0xFFFBF0DC.toInt()
+    val DISABLED_BG = 0xFFEDE5D8.toInt()
+    val DISABLED_TEXT = 0xFFA79C88.toInt()
+    /** Face des boutons secondaires : blanc franc, seule la pénombre le détache de l'ivoire. */
+    val BUTTON_FACE = 0xFFFFFFFF.toInt()
+    /** Ivoire légèrement translucide : laisse vivre le décor derrière la barre haute. */
+    val BAR = 0xEBF8F1EA.toInt()
+    val RIPPLE = 0x14000000
+    val SCRIM = 0xCC000000.toInt()
+    val RECIPE_PLACEHOLDERS = intArrayOf(
+        0xFFE2E8D8.toInt(), 0xFFF0E2D2.toInt(), 0xFFE8DDD0.toInt(),
+        0xFFDDE5E0.toInt(), 0xFFF0E9D9.toInt(), 0xFFE4E0D2.toInt(),
+        0xFFE1E7D6.toInt(), 0xFFEEDFD5.toInt(),
+    )
+
+    /** Ratio WCAG 2.x entre deux couleurs opaques. */
+    fun contrast(a: Int, b: Int): Double {
+        val first = luminance(a)
+        val second = luminance(b)
+        return (maxOf(first, second) + 0.05) / (minOf(first, second) + 0.05)
+    }
+
+    private fun luminance(color: Int): Double {
+        fun channel(shift: Int): Double {
+            val value = ((color shr shift) and 0xFF) / 255.0
+            return if (value <= 0.04045) value / 12.92
+            else Math.pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    }
+}

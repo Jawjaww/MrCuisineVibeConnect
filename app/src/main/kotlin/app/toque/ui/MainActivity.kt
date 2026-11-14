@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -29,6 +30,7 @@ import app.toque.core.machine.Snapshot
 import app.toque.core.machine.Verdict
 import app.toque.recipes.LidlSync
 import app.toque.recipes.SyncService
+import app.toque.ui.design.Decor
 import app.toque.ui.screens.HomeScreen
 import app.toque.ui.screens.SettingsScreen
 import java.text.SimpleDateFormat
@@ -66,10 +68,13 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Ui.BG))
 
         root = FrameLayout(this)
-        root.setBackgroundColor(Ui.BG)
+        // Décor : ivoire immédiat, photos composées hors thread principal puis appliquées.
+        Decor.install(root)
+        // API 26+ : le focus blanc natif est remplacé par nos anneaux explicites.
+        if (Build.VERSION.SDK_INT >= 26) root.defaultFocusHighlightEnabled = false
         val column = Ui.vertical(this)
         topBar = TopBar(this)
-        column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(60)))
+        column.addView(topBar, Ui.lp(Ui.MATCH, Ui.u(70)))
         content = FrameLayout(this)
         column.addView(content, Ui.lp(Ui.MATCH, 0, 1f))
         machineBar = MachineBar(this)
@@ -212,11 +217,15 @@ class MainActivity : Activity() {
         }
         if (event.action == KeyEvent.ACTION_DOWN && overlay.visibility != View.VISIBLE) {
             val k = event.keyCode
-            val left = prefs.knobLeft.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_LEFT }
-            val right = prefs.knobRight.let { if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_RIGHT }
-            val press = prefs.knobPress.let {
-                if (it >= 0) it == k else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
-            }
+            // Une calibration enregistre le périphérique de la molette : les touches d'un autre
+            // périphérique (télécommande TV) restent au système pour la navigation au focus.
+            // Sans calibration, on garde le comportement historique : les écrans qui gèrent la
+            // molette la consomment, les autres laissent Android naviguer (chute dans super).
+            if (prefs.knobDeviceId >= 0 && event.deviceId != prefs.knobDeviceId) return super.dispatchKeyEvent(event)
+            val left = if (prefs.knobLeft >= 0) prefs.knobLeft == k else k == KeyEvent.KEYCODE_DPAD_LEFT
+            val right = if (prefs.knobRight >= 0) prefs.knobRight == k else k == KeyEvent.KEYCODE_DPAD_RIGHT
+            val press = if (prefs.knobPress >= 0) prefs.knobPress == k
+            else k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
             val s = current
             if (s != null && currentFocus !is android.widget.EditText) {
                 if (left && s.onKnob(-1)) return true

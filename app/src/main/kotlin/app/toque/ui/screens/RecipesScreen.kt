@@ -84,6 +84,7 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         field.addView(input, LinearLayout.LayoutParams(0, Ui.MATCH, 1f))
         val clear = Icon(c, Icon.Kind.CLOSE, Ui.TEXT2)
         clear.setPadding(Ui.u(10), Ui.u(10), Ui.u(10), Ui.u(10))
+        Ui.focusable(clear, 24f, normal = Ui.SURFACE, pressed = Ui.SURFACE3)
         clear.setOnClickListener { input.setText("") }
         field.addView(clear, LinearLayout.LayoutParams(Ui.u(48), Ui.u(48)))
         bar.addView(field, LinearLayout.LayoutParams(0, Ui.u(64), 1f))
@@ -212,7 +213,7 @@ class RecipesScreen(a: MainActivity, private val focusSearch: Boolean = false, f
         val root = Ui.vertical(c)
         val imageBox = FrameLayout(c)
         val image = ImageView(c)
-        val initials = Ui.text(c, "", 44f, 0x55FFFFFF, Ui.THIN)
+        val initials = Ui.text(c, "", 44f, Ui.TEXT3, Ui.THIN)
         val title = Ui.ellipsize(Ui.text(c, "", 18f, Ui.TEXT, Ui.MEDIUM), 2)
         val meta = Ui.ellipsize(Ui.text(c, "", 15f, Ui.TEXT2))
         val star = Icon(c, Icon.Kind.STAR_FILLED, Ui.ACCENT)

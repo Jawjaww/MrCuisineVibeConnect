@@ -21,4 +21,10 @@ dependencies {
 tasks.test {
     // TwinIntegrationTest s'exécute seulement si tools/twin.py tourne (sinon ignoré).
     testLogging { events("passed", "skipped", "failed") }
+    // I18nTest et DesignTest lisent des fichiers situés hors du module : sans ces entrées,
+    // Gradle considère la tâche « à jour » et un changement de traduction passe inaperçu.
+    inputs.dir("../app/src/main/assets/lang")
+    inputs.dir("../app/src/main/assets/decor")
+    inputs.dir("../app/src/main/kotlin")
+    inputs.file("../docs/ASSETS-CREDITS.md")
 }

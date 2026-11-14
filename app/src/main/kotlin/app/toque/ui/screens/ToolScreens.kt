@@ -123,7 +123,7 @@ class KnobScreen(a: MainActivity) : Screen(a) {
         row.addView(Ui.button(c, tr("Tourner à droite"), Ui.Style.SECONDARY, height = 60) { ask("right") }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         row.addView(Ui.button(c, tr("Appuyer"), Ui.Style.SECONDARY, height = 60) { ask("press") }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 10))
         row.addView(Ui.button(c, tr("Par défaut"), Ui.Style.GHOST, height = 60) {
-            a.prefs.knobLeft = -1; a.prefs.knobRight = -1; a.prefs.knobPress = -1
+            a.prefs.knobLeft = -1; a.prefs.knobRight = -1; a.prefs.knobPress = -1; a.prefs.knobDeviceId = -1
             refresh()
         })
         root.addView(row, Ui.lp(t = 30))
@@ -148,6 +148,7 @@ class KnobScreen(a: MainActivity) : Screen(a) {
             "right" -> a.prefs.knobRight = e.keyCode
             "press" -> a.prefs.knobPress = e.keyCode
         }
+        a.prefs.knobDeviceId = e.deviceId
         capture = null
         a.knobListener = null
         refresh()
@@ -156,7 +157,8 @@ class KnobScreen(a: MainActivity) : Screen(a) {
     private fun refresh() {
         fun name(k: Int, def: String) = if (k < 0) tr("%s (par défaut)", def) else KeyEvent.keyCodeToString(k).removePrefix("KEYCODE_")
         info.text = tr("Gauche : %s\nDroite : %s\nAppui : %s\n\nLes molettes (défilement) sont aussi reconnues automatiquement.",
-            name(a.prefs.knobLeft, "DPAD_LEFT"), name(a.prefs.knobRight, "DPAD_RIGHT"), name(a.prefs.knobPress, "DPAD_CENTER"))
+            name(a.prefs.knobLeft, "DPAD_LEFT"), name(a.prefs.knobRight, "DPAD_RIGHT"), name(a.prefs.knobPress, "DPAD_CENTER")) +
+            "\n" + if (a.prefs.knobDeviceId >= 0) tr("Périphérique de la molette : %d", a.prefs.knobDeviceId) else tr("Périphérique de la molette : non calibré")
     }
 
     override fun onHide() {

@@ -17,24 +17,34 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import app.toque.ui.design.T
+import app.toque.ui.design.Focusable
 
-/** Thème sombre et utilitaires de mise en page, à l'échelle d'un écran de référence 1024×600. */
+/** Façade de compatibilité Ui : les écrans existants consomment les nouveaux tokens. */
 object Ui {
-    const val BG = 0xFF0B0C0E.toInt()
-    const val SURFACE = 0xFF15171B.toInt()
-    const val SURFACE2 = 0xFF1E2127.toInt()
-    const val SURFACE3 = 0xFF272B32.toInt()
-    const val STROKE = 0xFF2C3038.toInt()
-    const val TEXT = 0xFFF3F4F6.toInt()
-    const val TEXT2 = 0xFF9BA1AA.toInt()
-    const val TEXT3 = 0xFF666C75.toInt()
-    const val ACCENT = 0xFFFF8A3D.toInt()
-    const val ACCENT_DIM = 0x33FF8A3D
-    const val COOL = 0xFF5CC8FF.toInt()
-    const val OK = 0xFF3DDC97.toInt()
-    const val WARN = 0xFFFFC14D.toInt()
-    const val DANGER = 0xFFFF5A5F.toInt()
-    const val SCRIM = 0xCC000000.toInt()
+    val BG = T.BG
+    val SURFACE = T.SURFACE
+    val SURFACE2 = T.SURFACE2
+    val SURFACE3 = T.SURFACE3
+    val STROKE = T.STROKE
+    val STROKE_STRONG = T.STROKE_STRONG
+    val TEXT = T.TEXT
+    val TEXT2 = T.TEXT2
+    val TEXT3 = T.TEXT3
+    val ACCENT = T.BRAND
+    val ACCENT_DIM = T.WASH_BRAND
+    val BRAND = T.BRAND
+    val BOTANICAL = T.BOTANICAL
+    val WASH_BRAND = T.WASH_BRAND
+    val COOL = T.COOL
+    val OK = T.OK
+    val WARN = T.WARN
+    val DANGER = T.DANGER
+    val WARN_WASH = T.WARN_WASH
+    val DANGER_WASH = T.DANGER_WASH
+    val DISABLED_BG = T.DISABLED_BG
+    val DISABLED_TEXT = T.DISABLED_TEXT
+    val SCRIM = T.SCRIM
 
     val LIGHT: Typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
     val THIN: Typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
@@ -45,10 +55,20 @@ object Ui {
     /** Facteur d'échelle : 1 unité = 1 px sur un écran 1024×600. */
     var scale = 1f
 
+    /** Largeur et hauteur réellement disponibles, exprimées dans la grille de référence. */
+    var widthUnits = 1024f
+        private set
+    var heightUnits = 600f
+        private set
+
     fun init(widthPx: Int, heightPx: Int) {
         val w = maxOf(widthPx, heightPx)
         val h = minOf(widthPx, heightPx)
         scale = minOf(w / 1024f, h / 600f)
+        if (scale > 0f) {
+            widthUnits = w / scale
+            heightUnits = h / scale
+        }
     }
 
     fun u(v: Float): Int = Math.round(v * scale)
@@ -62,8 +82,8 @@ object Ui {
             if (strokeWidth > 0) setStroke(u(strokeWidth), strokeColor)
         }
 
-    fun pressable(base: Drawable, radius: Float, ripple: Int = 0x33FFFFFF): Drawable =
-        RippleDrawable(ColorStateList.valueOf(ripple), base, round(Color.WHITE, radius))
+    fun pressable(base: Drawable, radius: Float, ripple: Int = T.RIPPLE): Drawable =
+        RippleDrawable(ColorStateList.valueOf(ripple), base, round(SURFACE, radius))
 
     fun text(c: Context, s: CharSequence = "", size: Float = 18f, color: Int = TEXT, face: Typeface = REGULAR): TextView =
         TextView(c).apply {
@@ -131,17 +151,24 @@ object Ui {
     fun button(c: Context, label: String, style: Style = Style.SECONDARY, icon: Icon.Kind? = null,
                height: Int = 64, textSize: Float = 20f, onClick: (View) -> Unit): LinearLayout {
         val (bg, fg) = when (style) {
-            Style.PRIMARY -> ACCENT to 0xFF1A0E05.toInt()
+            Style.PRIMARY -> BRAND to SURFACE
             Style.SECONDARY -> SURFACE3 to TEXT
-            Style.DANGER -> DANGER to Color.WHITE
+            Style.DANGER -> DANGER to SURFACE
             Style.GHOST -> Color.TRANSPARENT to TEXT2
-            Style.COOL -> COOL to 0xFF04131C.toInt()
+            Style.COOL -> COOL to SURFACE
         }
         val row = horizontal(c, Gravity.CENTER)
         row.minimumHeight = u(height)
         row.setPadding(u(22), 0, u(22), 0)
-        val base = if (style == Style.GHOST) round(Color.TRANSPARENT, height / 2f, STROKE, 1.5f) else round(bg, height / 2f)
-        row.background = pressable(base, height / 2f)
+        val base = if (style == Style.GHOST) Color.TRANSPARENT else bg
+        Focusable.states(
+            row,
+            height / 2f,
+            normal = base,
+            pressed = if (style == Style.PRIMARY) T.BRAND_PRESSED else SURFACE3,
+            focusStroke = if (style == Style.PRIMARY) SURFACE else BRAND,
+        )
+        row.background = RippleDrawable(ColorStateList.valueOf(T.RIPPLE), row.background, round(SURFACE, height / 2f))
         if (icon != null) {
             row.addView(Icon(c, icon, fg), LinearLayout.LayoutParams(u(textSize * 1.3f), u(textSize * 1.3f)).apply {
                 if (label.isNotEmpty()) rightMargin = u(10)
@@ -154,9 +181,22 @@ object Ui {
         return row
     }
 
+    /** Anneau de focus et ripple pour les vues interactives historiques. */
+    fun focusable(
+        view: View,
+        radius: Float,
+        normal: Int = SURFACE,
+        pressed: Int = SURFACE3,
+        selected: Int? = null,
+        focusStroke: Int = BRAND,
+    ) {
+        Focusable.states(view, radius, normal, pressed, selected, focusStroke)
+        view.background = RippleDrawable(ColorStateList.valueOf(T.RIPPLE), view.background, round(SURFACE, radius))
+    }
+
     fun setButtonEnabled(b: View, enabled: Boolean) {
         b.isEnabled = enabled
-        b.alpha = if (enabled) 1f else 0.35f
+        b.alpha = if (enabled) 1f else T.DISABLED_ALPHA
     }
 
     /** Pastille d'information (icône + texte). */
@@ -173,15 +213,16 @@ object Ui {
 
     /** Puce sélectionnable (filtres, choix). */
     fun toggleChip(c: Context, label: String, selected: Boolean, onClick: () -> Unit): TextView {
-        val t = text(c, label, 17f, if (selected) 0xFF1A0E05.toInt() else TEXT, MEDIUM)
+        val t = text(c, label, 17f, if (selected) SURFACE else TEXT, MEDIUM)
         t.setPadding(u(18), u(10), u(18), u(10))
-        t.background = pressable(if (selected) round(ACCENT, 40f) else round(SURFACE2, 40f, STROKE, 1f), 40f)
+        Focusable.states(t, 40f, normal = if (selected) BRAND else SURFACE2, pressed = SURFACE3, selected = BRAND)
+        t.isSelected = selected
         t.isClickable = true
         t.setOnClickListener { onClick() }
         return t
     }
 
-    fun card(c: Context, radius: Float = 24f, color: Int = SURFACE): LinearLayout = vertical(c).apply {
+    fun card(c: Context, radius: Float = T.Radius.CARD, color: Int = SURFACE): LinearLayout = vertical(c).apply {
         background = round(color, radius)
         setPadding(u(20), u(18), u(20), u(18))
     }
@@ -198,20 +239,16 @@ object Ui {
         else -> "${seconds / 60} min ${seconds % 60} s"
     }
 
-    /** Couleur liée à une température : froid -> bleu, tiède -> orange, chaud -> rouge. */
+    /** Trois bandes seulement : froid -> bleu, tiède -> ambre, chaud -> rouge. */
     fun tempColor(c: Int): Int = when {
         c >= 90 -> DANGER
-        c >= 60 -> ACCENT
         c >= 40 -> WARN
         else -> COOL
     }
 
     /** Couleur de repli stable pour une vignette de recette sans photo. */
     fun placeholderColors(seed: String): IntArray {
-        val palette = intArrayOf(
-            0xFF3A2416.toInt(), 0xFF16302A.toInt(), 0xFF2B2140.toInt(), 0xFF3B1E26.toInt(),
-            0xFF1C2B3E.toInt(), 0xFF35301A.toInt(), 0xFF1E3320.toInt(), 0xFF3A2A1C.toInt(),
-        )
+        val palette = T.RECIPE_PLACEHOLDERS
         val i = Math.abs(seed.hashCode()) % palette.size
         val a = palette[i]
         val b = palette[(i + 3) % palette.size]

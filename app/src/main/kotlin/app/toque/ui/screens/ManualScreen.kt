@@ -2,6 +2,7 @@ package app.toque.ui.screens
 
 import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import app.toque.core.i18n.tr
@@ -15,21 +16,22 @@ import app.toque.core.machine.SafetyPolicy
 import app.toque.core.machine.Snapshot
 import app.toque.core.protocol.Direction
 import app.toque.core.protocol.Mcc
-import app.toque.ui.HoldButton
 import app.toque.ui.Icon
 import app.toque.ui.MainActivity
 import app.toque.ui.Screen
-import app.toque.ui.TempRing
 import app.toque.ui.Ui
-import app.toque.ui.ValueCard
+import app.toque.ui.design.Dial
+import app.toque.ui.design.HoldRoundButton
+import app.toque.ui.design.PlayButton
+import app.toque.ui.design.MiniCircle
+import app.toque.ui.design.RoundButton
+import app.toque.ui.screens.ScaleScreen
+import app.toque.ui.design.ToggleRoundButton
+import app.toque.ui.design.T
 
-/**
- * Cuisson manuelle. Les réglages incompatibles sont corrigés à la saisie (vitesse limitée en
- * chauffe, en sens inverse ou avec le fouet) plutôt que refusés au démarrage.
- */
+/** Cuisson manuelle : nouvelle présentation, logique moteur et politique de sécurité inchangées. */
 class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? = null) : Screen(a) {
     override val title = JobKind.MANUAL.label
-
     private var seconds = preset?.seconds?.takeIf { it > 0 } ?: 60
     private var tempLevel = preset?.temperatureLevel ?: 0
     private var speed = preset?.speed?.coerceIn(1, 10) ?: 2
@@ -37,71 +39,146 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private var accessory = preset?.accessory ?: Accessory.BLADE
     private var selected = 0
 
-    private lateinit var timeCard: ValueCard
-    private lateinit var tempCard: ValueCard
-    private lateinit var speedCard: ValueCard
-    private lateinit var dirRow: LinearLayout
-    private lateinit var accRow: LinearLayout
-    private lateinit var ring: TempRing
-    private lateinit var weight: TextView
-    private lateinit var startBtn: LinearLayout
+    private lateinit var timeDial: Dial
+    private lateinit var tempDial: Dial
+    private lateinit var speedDial: Dial
+    private lateinit var directionToggle: ToggleRoundButton
+    private lateinit var accessoryToggle: ToggleRoundButton
+    private lateinit var startButton: PlayButton
     private lateinit var hint: TextView
-    private lateinit var turbo: HoldButton
+    private lateinit var turbo: HoldRoundButton
+    private lateinit var weightMini: MiniCircle
+    private lateinit var tempMini: MiniCircle
+    private var dialSize = Dial.SIZE
+
     private var live = false
     private var wasLive = false
     private var pendingEdit = false
     private var timeEdited = false
     private var configuredSeconds = seconds
+    private var actualTemp = 0
+    private var hasSample = false
     private val pushLive = Runnable { sendAdjust() }
 
     override fun build(): View {
-        val root = Ui.horizontal(c, Gravity.TOP)
-        root.setPadding(Ui.u(24), Ui.u(8), Ui.u(24), Ui.u(20))
-        val left = Ui.vertical(c)
-        val cards = Ui.horizontal(c)
-        timeCard = ValueCard(c, tr("Durée"), Icon.Kind.CLOCK)
-        tempCard = ValueCard(c, tr("Température"), Icon.Kind.THERMO)
-        speedCard = ValueCard(c, tr("Vitesse"), Icon.Kind.SPEED)
-        val all = listOf(timeCard, tempCard, speedCard)
-        for ((i, card) in all.withIndex()) {
-            card.onSelect = { selected = i; refresh() }
-            card.onMinus = { change(i, -1) }
-            card.onPlus = { change(i, 1) }
-            cards.addView(card, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { if (i < 2) rightMargin = Ui.u(14) })
+        // La hauteur est le facteur limitant : 530 unités, dont 112 pour la rangée de commandes
+        // et 56 pour Démarrer. D'où 320 pour les cadrans, le maximum vérifié.
+        val button = 96
+        val gap = 6
+        // Le plus grand bouton qui laisse intactes les mini-cadrans et la rangée de commandes.
+        dialSize = 340
+        val groupWidth = 3 * dialSize + 2 * gap
+        val controlsTop = dialSize + 4
+
+        val dash = FrameLayout(c)
+        dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
+
+        // --- Coins hauts : poids à gauche, température à droite.
+        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 112)
+        dash.addView(weightMini, FrameLayout.LayoutParams(Ui.u(112), Ui.u(112), Gravity.TOP or Gravity.START))
+        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 112)
+        dash.addView(
+            tempMini,
+            FrameLayout.LayoutParams(Ui.u(112), Ui.u(112), Gravity.TOP or Gravity.END).apply {
+                rightMargin = Ui.u(16)
+            },
+        )
+
+        // --- Les trois cadrans, centrés.
+        timeDial = Dial(c, Icon.Kind.CLOCK, size = dialSize)
+        speedDial = Dial(c, Icon.Kind.SPEED, Icon.Kind.SPEED, size = dialSize)
+        tempDial = Dial(c, Icon.Kind.THERMO, size = dialSize)
+        val all = listOf(timeDial, speedDial, tempDial)
+        val group = FrameLayout(c)
+        for ((index, dial) in all.withIndex()) {
+            dial.onSelect = { selected = index; refresh() }
+            dial.onMinus = { change(index, -1) }
+            dial.onPlus = { change(index, 1) }
+            group.addView(
+                dial,
+                FrameLayout.LayoutParams(Ui.u(dialSize), Ui.WRAP).apply {
+                    leftMargin = Ui.u(index * (dialSize + gap))
+                },
+            )
         }
-        left.addView(cards, LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
+        dash.addView(
+            group,
+            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = Ui.u(24)
+            },
+        )
 
-        val options = Ui.horizontal(c)
-        dirRow = Ui.horizontal(c)
-        accRow = Ui.horizontal(c)
-        options.addView(dirRow)
-        options.addView(Ui.spacer(c, w = 18))
-        options.addView(accRow)
-        options.addView(Ui.spacer(c, weight = 1f), LinearLayout.LayoutParams(0, 1, 1f))
-        turbo = HoldButton(c, "Turbo", onDown = {
-            a.machine.turboDown(accessory) { v -> if (!v.ok) a.refusal(v) }
-        }, onUp = { a.machine.turboUp() })
-        options.addView(turbo, Ui.lp(Ui.WRAP, Ui.u(64)))
-        left.addView(options, Ui.lp(Ui.MATCH, Ui.WRAP, t = 16))
-        root.addView(left, LinearLayout.LayoutParams(0, Ui.MATCH, 1f).apply { rightMargin = Ui.u(20) })
+        directionToggle = ToggleRoundButton(c, flat = true) { setReverse(!reverse) }
+        directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
+        accessoryToggle = ToggleRoundButton(c, flat = true) {
+            setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
+        }
+        accessoryToggle.configure(tr("Fouet"), Icon.Kind.WHISK, tr("Lame"), Icon.Kind.BLADE)
+        turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
+            a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
+        }, onUp = { a.machine.turboUp() }, flat = true)
+        val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser"), flat = true) { a.push(ScaleScreen(a)) }
 
-        val right = Ui.vertical(c, Gravity.CENTER_HORIZONTAL)
-        right.background = Ui.round(Ui.SURFACE, 26f)
-        right.setPadding(Ui.u(18), Ui.u(14), Ui.u(18), Ui.u(18))
-        ring = TempRing(c)
-        right.addView(ring, LinearLayout.LayoutParams(Ui.MATCH, 0, 1f))
-        weight = Ui.text(c, "", 18f, Ui.TEXT2)
-        right.addView(weight, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
-        hint = Ui.text(c, "", 16f, Ui.WARN).apply { gravity = Gravity.CENTER }
-        right.addView(hint, Ui.lp(Ui.MATCH, Ui.WRAP, t = 8))
-        startBtn = Ui.button(c, tr("Démarrer"), Ui.Style.PRIMARY, Icon.Kind.PLAY, height = 80, textSize = 24f) { start() }
-        right.addView(startBtn, Ui.lp(Ui.MATCH, Ui.WRAP, t = 12))
-        root.addView(right, LinearLayout.LayoutParams(Ui.u(300), Ui.MATCH))
+        // --- Peser et Turbo vont jusqu'aux bords de l'écran ; les deux bascules restent dans
+        // les creux entre les cadrans. Elles vivent toutes sous la ligne des − / +.
+        // Rangée régulière en bas : quatre commandes à égale distance, comme la référence.
+        val controlsRow = Ui.horizontal(c)
+        for (control in listOf(weigh, directionToggle, accessoryToggle, turbo)) {
+            val cell = FrameLayout(c)
+            cell.addView(control, FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP, Gravity.CENTER_HORIZONTAL))
+            controlsRow.addView(cell, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
+        }
+        dash.addView(
+            controlsRow,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP, Gravity.BOTTOM).apply {
+                bottomMargin = Ui.u(4)
+            },
+        )
+
+        // --- Démarrer, dans l'angle bas-droit.
+        startButton = PlayButton(c) { start() }
+        val play = FrameLayout(c)
+        play.addView(startButton, FrameLayout.LayoutParams(Ui.u(96), Ui.u(96), Gravity.CENTER))
+        dash.addView(
+            play,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.u(96), Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = Ui.u(24 + dialSize)
+            },
+        )
+
+        // Message d'aide dans la bande haute, entre les deux mini-cadrans.
+        hint = Ui.text(c, "", T.Type.SMALL, T.WARN).apply {
+            gravity = Gravity.CENTER
+            setLineSpacing(0f, 1.05f)
+            visibility = View.GONE
+        }
+        dash.addView(
+            hint,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.u(90), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = Ui.u(150)
+                rightMargin = Ui.u(150)
+                topMargin = Ui.u(24)
+            },
+        )
+
         refresh()
-        return root
+        return dash
     }
 
+    /** Position absolue dans la grille du tableau de bord, en unités 1024×600. */
+    private fun at(x: Int, y: Int, w: Int, h: Int, gravity: Int = Gravity.TOP or Gravity.START) =
+        FrameLayout.LayoutParams(Ui.u(w), Ui.u(h), gravity).apply {
+            leftMargin = Ui.u(x)
+            topMargin = Ui.u(y)
+        }
+
     private val tempSteps: IntArray get() = intArrayOf(0) + (1..19).toList().toIntArray()
+
+    private companion object {
+        const val DIAL_TIME = 0
+        const val DIAL_SPEED = 1
+        const val DIAL_TEMP = 2
+    }
 
     private fun nextSeconds(s: Int, dir: Int): Int {
         val step = when {
@@ -114,18 +191,18 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     }
 
     private fun change(card: Int, dir: Int) {
-        val s = a.snapshot
+        val snapshot = a.snapshot
         when (card) {
-            0 -> seconds = nextSeconds(seconds, dir)
-            1 -> {
-                val i = tempSteps.indexOf(tempLevel).coerceAtLeast(0)
-                tempLevel = tempSteps[(i + dir).coerceIn(0, tempSteps.size - 1)]
+            DIAL_TIME -> seconds = nextSeconds(seconds, dir)
+            DIAL_TEMP -> {
+                val index = tempSteps.indexOf(tempLevel).coerceAtLeast(0)
+                tempLevel = tempSteps[(index + dir).coerceIn(0, tempSteps.size - 1)]
                 if (tempLevel > 0 && speed > Limits.MAX_SPEED_HEATED) {
                     speed = Limits.MAX_SPEED_HEATED
                     a.toast(tr("En chauffe, vitesse %d maximum", Limits.MAX_SPEED_HEATED))
                 }
             }
-            2 -> {
+            DIAL_SPEED -> {
                 var max = 10
                 var why = trKey("Vitesse %d maximum")
                 if (tempLevel > 0) { max = Limits.MAX_SPEED_HEATED; why = trKey("En chauffe, vitesse %d maximum") }
@@ -135,33 +212,37 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
                 if (next > max) a.toast(tr(why, max)) else speed = next
             }
         }
-        val maxS = ((if (speed > 6) Limits.MAX_MS_HIGH_SPEED else Limits.MAX_MS_DEFAULT) / 1000).toInt()
-        if (seconds > maxS) seconds = maxS
+        val maxSeconds = ((if (speed > 6) Limits.MAX_MS_HIGH_SPEED else Limits.MAX_MS_DEFAULT) / 1000).toInt()
+        if (seconds > maxSeconds) seconds = maxSeconds
         refresh()
-        if (live && s.kind?.name == "MANUAL") {
-            if (card == 0) timeEdited = true
+        if (live && snapshot.kind?.name == "MANUAL") {
+            if (card == DIAL_TIME) timeEdited = true
             pendingEdit = true
             view.removeCallbacks(pushLive)
             view.postDelayed(pushLive, 350)
         }
     }
 
-    private fun setReverse(r: Boolean) {
-        if (r && speed > Limits.MAX_SPEED_REVERSE) {
+    private fun setReverse(value: Boolean) {
+        if (value && speed > Limits.MAX_SPEED_REVERSE) {
             speed = Limits.MAX_SPEED_REVERSE
             a.toast(tr("En sens inverse, vitesse %d maximum", Limits.MAX_SPEED_REVERSE))
         }
-        reverse = r
+        reverse = value
         refresh()
-        if (live) { pendingEdit = true; view.removeCallbacks(pushLive); view.postDelayed(pushLive, 200) }
+        if (live) {
+            pendingEdit = true
+            view.removeCallbacks(pushLive)
+            view.postDelayed(pushLive, 200)
+        }
     }
 
-    private fun setAccessory(acc: Accessory) {
+    private fun setAccessory(value: Accessory) {
         if (live) return
-        accessory = acc
-        if (speed > acc.maxSpeed) {
-            speed = acc.maxSpeed
-            a.toast(tr("%s : vitesse %d maximum", acc.label, acc.maxSpeed))
+        accessory = value
+        if (speed > value.maxSpeed) {
+            speed = value.maxSpeed
+            a.toast(tr("%s : vitesse %d maximum", value.label, value.maxSpeed))
         }
         refresh()
     }
@@ -172,9 +253,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     )
 
     private fun start() {
-        val s = a.snapshot
-        if (s.state == JobState.PAUSED && s.kind?.name == "MANUAL") {
-            a.machine.resume(s.hotBlendConfirmed) { a.refusal(it) }
+        val snapshot = a.snapshot
+        if (snapshot.state == JobState.PAUSED && snapshot.kind?.name == "MANUAL") {
+            a.machine.resume(snapshot.hotBlendConfirmed) { a.refusal(it) }
             return
         }
         configuredSeconds = seconds
@@ -183,65 +264,107 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
     private fun sendAdjust() {
         pendingEdit = false
-        val s = a.snapshot
-        if (!s.jobActive || s.kind?.name != "MANUAL") return
+        val snapshot = a.snapshot
+        if (!snapshot.jobActive || snapshot.kind?.name != "MANUAL") return
         // La durée n'est renvoyée que si elle a été modifiée : changer la vitesse ne relance pas le minuteur.
-        val total: Long? = if (timeEdited) s.elapsedMs + seconds * 1000L else null
+        val total: Long? = if (timeEdited) snapshot.elapsedMs + seconds * 1000L else null
         timeEdited = false
-        a.machine.adjust(speed, tempLevel, reverse, total, s.hotBlendConfirmed) { v ->
-            if (!v.ok && v.has(SafetyPolicy.HOT_BLEND)) {
-                a.confirm(tr("Contenu chaud"), tr("Le bol est à %d °C. Passer à la vitesse %d ?", a.snapshot.actualTempC, speed), tr("Confirmer"), icon = Icon.Kind.THERMO) {
+        a.machine.adjust(speed, tempLevel, reverse, total, snapshot.hotBlendConfirmed) { verdict ->
+            if (!verdict.ok && verdict.has(SafetyPolicy.HOT_BLEND)) {
+                a.confirm(
+                    tr("Contenu chaud"),
+                    tr("Le bol est à %d °C. Passer à la vitesse %d ?", a.snapshot.actualTempC, speed),
+                    tr("Confirmer"),
+                    icon = Icon.Kind.THERMO,
+                ) {
                     a.machine.adjust(speed, tempLevel, reverse, total, true) { a.refusal(it) }
                 }
-            } else a.refusal(v)
+            } else a.refusal(verdict)
         }
     }
 
-    private fun refresh() {
-        val maxS = if (speed > 6) "max 15 min" else "max 99 min"
-        timeCard.set(Ui.clock(seconds * 1000L), "", maxS)
-        if (tempLevel == 0) tempCard.set("—", "", tr("Sans chauffe"), Ui.TEXT2)
-        else {
-            val t = Mcc.celsiusForLevel(tempLevel)
-            tempCard.set("$t", "°C", if (t >= 100) tr("Ébullition") else if (t >= 60) tr("Cuisson") else tr("Tiédir"), Ui.tempColor(t))
+    /**
+     * Vocabulaire d'origine du projet : il décrivait déjà la nature de la consigne
+     * (« Tiédir », « Cuisson », « Ébullition », « Sans chauffe »). On le réutilise au lieu
+     * de le remplacer, et on accole la mesure réelle.
+     */
+    private fun tempQuality(): String {
+        if (tempLevel == 0) return tr("Sans chauffe")
+        val t = Mcc.celsiusForLevel(tempLevel)
+        return when {
+            t >= 100 -> tr("Ébullition")
+            t >= 60 -> tr("Cuisson")
+            else -> tr("Tiédir")
         }
-        speedCard.set("$speed", "", when (speed) {
-            1 -> tr("Mijoter")
-            2, 3 -> tr("Mélanger")
-            in 4..6 -> tr("Hacher")
-            else -> tr("Mixer")
-        } + if (reverse) " · " + tr("inverse") else "")
-        timeCard.select(selected == 0)
-        tempCard.select(selected == 1)
-        speedCard.select(selected == 2)
+    }
 
-        dirRow.removeAllViews()
-        dirRow.addView(Ui.toggleChip(c, tr("Sens normal"), !reverse) { setReverse(false) }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
-        dirRow.addView(Ui.toggleChip(c, tr("Inverse"), reverse) { setReverse(true) })
-        accRow.removeAllViews()
-        accRow.addView(Ui.toggleChip(c, Accessory.BLADE.label, accessory == Accessory.BLADE) { setAccessory(Accessory.BLADE) }, Ui.lp(Ui.WRAP, Ui.WRAP, r = 8))
-        accRow.addView(Ui.toggleChip(c, Accessory.WHISK.label, accessory == Accessory.WHISK) { setAccessory(Accessory.WHISK) })
+    private fun tempValue(): String = if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel).toString() else "0"
 
-        val v = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
+    private fun tempLegend(): String {
+        val measured = if (hasSample) tr("Mesurée : %d °C", actualTemp) else tr("Mesure indisponible")
+        return tempQuality() + " · " + measured
+    }
+
+    private fun tempProgress(): Float =
+        if (tempLevel > 0) (Mcc.celsiusForLevel(tempLevel) / 130f).coerceIn(0f, 1f) else 0f
+
+    private fun measuredMarker(): Float? =
+        if (hasSample) (actualTemp / 130f).coerceIn(0f, 1f) else null
+
+    private fun speedLegend(): String = when (speed) {
+        1 -> tr("Mijoter")
+        2, 3 -> tr("Mélanger")
+        in 4..6 -> tr("Hacher")
+        else -> tr("Mixer")
+    } + if (reverse) " · " + tr("inverse") else ""
+
+    private fun refresh() {
+        val timeLegend = if (live) tr("restant") else if (speed > 6) "max 15 min" else "max 99 min"
+        timeDial.set(Ui.clock(seconds * 1000L), "", timeLegend, (seconds / 5940f).coerceIn(0f, 1f))
+
+        tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
+        speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
+            if (a.snapshot.speedLevel > 0) (a.snapshot.speedLevel / 10f).coerceIn(0f, 1f) else null)
+
+        timeDial.select(selected == DIAL_TIME)
+        speedDial.select(selected == DIAL_SPEED)
+        tempDial.select(selected == DIAL_TEMP)
+        directionToggle.set(reverse)
+        accessoryToggle.set(accessory == Accessory.WHISK)
+        accessoryToggle.setButtonEnabled(!live)
+
+        val warnings = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
             .filter { it.code != SafetyPolicy.HOT_BLEND }
-        hint.text = v.firstOrNull()?.message ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else ""
-        Ui.setButtonEnabled(startBtn, v.isEmpty())
+        setHint(warnings.firstOrNull()?.message
+            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else "")
+        startButton.setEnabledState(warnings.isEmpty())
     }
 
     override fun onSnapshot(s: Snapshot) {
-        ring.set(if (s.hasSample) s.actualTempC else 0, if (s.jobActive && s.jobTempLevel > 0) Mcc.celsiusForLevel(s.jobTempLevel) else
-            if (tempLevel > 0) Mcc.celsiusForLevel(tempLevel) else 0, s.speedLevel)
-        weight.text = if (s.hasSample) tr("Balance : %d g", s.weightG) else tr("Base non connectée")
-        val manualJob = s.kind?.name == "MANUAL" && (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
+        hasSample = s.hasSample
+        actualTemp = if (s.hasSample) s.actualTempC else 0
+        tempDial.set(tempValue(), "°C", tempLegend(), tempProgress(), measuredMarker())
+        speedDial.set(speed.toString(), "", speedLegend(), speed / 10f,
+            if (s.speedLevel > 0) (s.speedLevel / 10f).coerceIn(0f, 1f) else null)
+
+        tempMini.set(if (s.hasSample) "${s.actualTempC} °C" else "—", s.hasSample)
+        weightMini.set(if (s.hasSample) "${s.weightG} g" else "—", s.hasSample)
+        weightMini.contentDescription =
+            if (s.hasSample) tr("Balance : %d g", s.weightG) else tr("Base non connectée")
+
+        val manualJob = s.kind?.name == "MANUAL" &&
+            (s.state == JobState.RUNNING || s.state == JobState.STARTING || s.state == JobState.PAUSED)
         live = manualJob && s.state != JobState.PAUSED
-        tempCard.repeatEnabled = !live
-        speedCard.repeatEnabled = !live
+        timeDial.repeatEnabled = true
+        tempDial.repeatEnabled = !live
+        speedDial.repeatEnabled = !live
+        accessoryToggle.setButtonEnabled(!live)
+
         if (live && !pendingEdit) {
-            // Pendant la cuisson, la carte Durée affiche le temps restant.
             val remaining = ((s.remainingMs + 999) / 1000).toInt().coerceAtLeast(1)
             if (remaining != seconds) {
                 seconds = remaining
-                timeCard.set(Ui.clock(seconds * 1000L), "", tr("restant"))
+                timeDial.set(Ui.clock(seconds * 1000L), "", tr("restant"), (seconds / 5940f).coerceIn(0f, 1f))
             }
         }
         if (wasLive && !live && !manualJob) {
@@ -249,19 +372,29 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             refresh()
         }
         wasLive = live
+
         val busy = s.busy
-        startBtn.visibility = if (busy && s.state != JobState.PAUSED) View.GONE else View.VISIBLE
-        (startBtn.getChildAt(1) as TextView).text = if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer")
-        turbo.isEnabled = !busy || s.turboActive
-        turbo.alpha = if (turbo.isEnabled) 1f else 0.35f
-        if (live) hint.text = tr("Réglages appliqués en direct")
+        // La barre machine a son propre bouton de reprise : Démarrer laisse la place entière
+        // à la zone basse dès qu'un programme est actif.
+        startButton.visibility = if (s.jobActive || s.turboActive || s.hasFault) View.GONE else View.VISIBLE
+        startButton.contentDescription =
+            if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer")
+        turbo.setButtonEnabled(!busy || s.turboActive)
+        if (live) setHint(tr("Réglages appliqués en direct"))
         else if (!busy) refreshHintOnly()
     }
 
     private fun refreshHintOnly() {
-        val v = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
+        val warnings = SafetyPolicy.checkJob(spec(), if (a.snapshot.hasSample) a.snapshot.actualTempC else null)
             .filter { it.code != SafetyPolicy.HOT_BLEND }
-        hint.text = v.firstOrNull()?.message ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else ""
+        setHint(warnings.firstOrNull()?.message
+            ?: if (a.snapshot.hot && speed >= 4) tr("Contenu chaud : confirmation demandée") else "")
+    }
+
+    /** La ligne d'aide ne réserve de la place que lorsqu'elle a quelque chose à dire. */
+    private fun setHint(text: String) {
+        hint.text = text
+        hint.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
     }
 
     override fun onKnob(delta: Int): Boolean {
@@ -270,9 +403,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     }
 
     override fun onKnobPress(): Boolean {
-        val s = a.snapshot
+        val snapshot = a.snapshot
         when {
-            s.state == JobState.RUNNING -> a.machine.pause { a.refusal(it) }
+            snapshot.state == JobState.RUNNING -> a.machine.pause { a.refusal(it) }
             else -> start()
         }
         return true

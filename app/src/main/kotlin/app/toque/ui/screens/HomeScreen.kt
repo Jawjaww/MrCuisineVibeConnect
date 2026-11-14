@@ -47,7 +47,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         val search = Ui.horizontal(c)
         search.setPadding(Ui.u(24), 0, Ui.u(24), 0)
-        search.background = Ui.pressable(Ui.round(Ui.SURFACE, 36f, Ui.STROKE, 1f), 36f)
+        Ui.focusable(search, 36f, normal = Ui.SURFACE, pressed = Ui.SURFACE3)
         search.addView(Icon(c, Icon.Kind.SEARCH, Ui.TEXT2), LinearLayout.LayoutParams(Ui.u(28), Ui.u(28)).apply { rightMargin = Ui.u(14) })
         search.addView(Ui.text(c, tr("Rechercher une recette…"), 21f, Ui.TEXT3))
         search.isClickable = true
@@ -56,7 +56,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         resumeCard = Ui.horizontal(c)
         resumeCard.setPadding(Ui.u(22), Ui.u(16), Ui.u(18), Ui.u(16))
-        resumeCard.background = Ui.pressable(Ui.round(Ui.ACCENT_DIM, 24f), 24f)
+        Ui.focusable(resumeCard, 24f, normal = Ui.ACCENT_DIM, pressed = Ui.SURFACE3)
         resumeCard.addView(Icon(c, Icon.Kind.PLAY, Ui.ACCENT), LinearLayout.LayoutParams(Ui.u(26), Ui.u(26)).apply { rightMargin = Ui.u(14) })
         resumeText = Ui.ellipsize(Ui.text(c, "", 19f, Ui.TEXT, Ui.MEDIUM), 2)
         resumeCard.addView(resumeText, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
@@ -94,7 +94,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private fun tile(icon: Icon.Kind, title: String, sub: String = "", onClick: () -> Unit): Pair<LinearLayout, TextView> {
         val t = Ui.vertical(c)
         t.setPadding(Ui.u(20), Ui.u(20), Ui.u(18), Ui.u(18))
-        t.background = Ui.pressable(Ui.round(Ui.SURFACE, 26f), 26f)
+        Ui.focusable(t, 26f, normal = Ui.SURFACE, pressed = Ui.SURFACE3)
         val badge = android.widget.FrameLayout(c)
         badge.background = Ui.round(Ui.ACCENT_DIM, 26f)
         badge.addView(Icon(c, icon, Ui.ACCENT), Ui.flp(Ui.u(28), Ui.u(28), Gravity.CENTER))

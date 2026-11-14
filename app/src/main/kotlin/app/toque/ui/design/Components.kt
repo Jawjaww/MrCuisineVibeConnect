@@ -1,0 +1,1021 @@
+package app.toque.ui.design
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.graphics.ColorFilter
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import app.toque.core.i18n.tr
+import app.toque.ui.Icon
+import app.toque.ui.Ui
+import kotlin.math.exp
+import kotlin.math.sqrt
+
+/** Fabrique les états focus, sélection et appui sans dépendre du focus blanc par défaut d'Android. */
+object Focusable {
+    fun states(
+        view: View,
+        radius: Float,
+        normal: Int = T.SURFACE,
+        pressed: Int = T.SURFACE3,
+        selected: Int? = null,
+        focusStroke: Int = T.BRAND,
+        hairline: Float = T.Line.HAIR,
+    ) {
+        val drawable = StateListDrawable()
+        if (selected != null) {
+            drawable.addState(
+                intArrayOf(android.R.attr.state_focused, android.R.attr.state_selected),
+                Ui.round(selected, radius, T.SURFACE, T.Line.FOCUS),
+            )
+            drawable.addState(
+                intArrayOf(android.R.attr.state_selected),
+                Ui.round(selected, radius, selected, T.Line.SELECTED),
+            )
+        }
+        drawable.addState(intArrayOf(android.R.attr.state_focused), Ui.round(normal, radius, focusStroke, T.Line.FOCUS))
+        drawable.addState(intArrayOf(android.R.attr.state_pressed), Ui.round(pressed, radius, T.STROKE, hairline))
+        drawable.addState(intArrayOf(), Ui.round(normal, radius, T.STROKE, hairline))
+        view.background = drawable
+        view.isFocusable = true
+    }
+
+    /** Dégradé à trois états : repos, appui, focus. Aucune animation, aucun flou. */
+    fun gradientButton(view: View, radius: Float, top: Int, bottom: Int, pressedTop: Int, pressedBottom: Int) {
+        fun layer(from: Int, to: Int, stroke: Int?): GradientDrawable =
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(from, to)).apply {
+                cornerRadius = Ui.uf(radius)
+                if (stroke != null) setStroke(Ui.u(T.Line.FOCUS), stroke)
+            }
+        val drawable = StateListDrawable()
+        drawable.addState(intArrayOf(android.R.attr.state_focused), layer(top, bottom, T.SURFACE))
+        drawable.addState(intArrayOf(android.R.attr.state_pressed), layer(pressedTop, pressedBottom, null))
+        drawable.addState(intArrayOf(), layer(top, bottom, null))
+        view.background = drawable
+        view.isFocusable = true
+    }
+}
+
+/**
+ * Pénombre calculée au pixel, une fois par taille, puis mise en cache.
+ *
+ * Elle est décrite **en coordonnées polaires autour du disque** : l'alpha ne dépend que de la
+ * distance au bord du cercle, et un masque vertical l'éteint au-dessus. Aucune fenêtre
+ * rectangulaire n'intervient, donc la pénombre épouse le contour et ne dessine jamais un carré ;
+ * elle s'annule d'elle-même avant la limite du bitmap.
+ */
+object ShadowLayer {
+    private val cache = HashMap<Long, Bitmap>()
+
+    /** Ombre de contact : rien au-dessus de la ligne médiane, un liseré sous la forme. */
+    fun contact(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
+        build(diameterPx, spreadPx, maxAlpha, 0L, topFade = 0.02f, bottomFull = 0.30f)
+
+    /**
+     * Ombre portée : présente sur tout le pourtour, pour un élément posé **sur** un autre.
+     * C'est elle qui dessine sur le cadran le contour des boutons − / + qui le chevauchent.
+     */
+    fun drop(diameterPx: Int, spreadPx: Int, maxAlpha: Int): Bitmap =
+        build(diameterPx, spreadPx, maxAlpha, 1L, topFade = 0.98f, bottomFull = 1f)
+
+    private fun build(
+        diameterPx: Int,
+        spreadPx: Int,
+        maxAlpha: Int,
+        tag: Long,
+        topFade: Float,
+        bottomFull: Float,
+    ): Bitmap {
+        require(diameterPx > 0)
+        // La clé doit distinguer TOUS les paramètres : sinon une ombre `contact` servait pour
+        // un appel `drop` de même diamètre, et le rendu devenait faux de façon intermittente.
+        val key = (diameterPx.toLong() shl 32) or
+            (spreadPx.toLong() shl 16) or
+            (maxAlpha.toLong() shl 8) or
+            (topFade.toLong() shl 4) or
+            (bottomFull.toLong() shl 3) or
+            tag
+        cache[key]?.let { return it }
+        val side = diameterPx + 2 * spreadPx
+        val pixels = IntArray(side * side)
+        val r = diameterPx / 2f
+        val c = side / 2f
+        // Courte : la pénombre s'éteint à ~0,8 fois le débord, donc bien avant le bord du bitmap.
+        val falloff = (spreadPx * 0.40f).coerceAtLeast(0.8f)
+        val lowEdge = -r * topFade
+        val fullEdge = r * bottomFull
+        for (y in 0 until side) {
+            val dy = y - c
+            val vertical = ((dy - lowEdge) / (fullEdge - lowEdge)).coerceIn(0f, 1f)
+            if (vertical <= 0f) continue
+            for (x in 0 until side) {
+                val dx = x - c
+                val d = sqrt(dx * dx + dy * dy)
+                val out = ((d - r) / falloff).coerceAtLeast(0f)
+                val radial = exp(-(out * out))
+                if (radial < 0.02f) continue
+                val a = (maxAlpha * radial * vertical).toInt()
+                if (a > 0) pixels[y * side + x] = a.coerceIn(0, 255) shl 24
+            }
+        }
+        val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(pixels, 0, side, 0, 0, side, side)
+        cache[key] = bitmap
+        return bitmap
+    }
+}
+
+/**
+ * Fond de bouton : pénombre + disque, dessinés dans les limites de la vue.
+ *
+ * Android rogne le dessin d'une vue à ses propres limites : une ombre dessinée hors du view est
+ * coupée net sur un carré. La vue réserve donc le débord, et ce Drawable dessine l'ombre, la face
+ * et l'anneau de focus à partir de son état.
+ */
+class DiscBackground(
+    private val spread: Int,
+    private val alpha: Int,
+    private val cast: Boolean = false,
+    face: Int = T.BUTTON_FACE,
+) : Drawable() {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private var state = intArrayOf()
+
+    override fun isStateful(): Boolean = true
+
+    override fun onStateChange(newState: IntArray): Boolean {
+        state = newState
+        invalidateSelf()
+        return true
+    }
+
+    /** Teinte de la face : ivoire clair, pour se détacher aussi du blanc des cadrans. */
+    var face: Int = face
+        @Suppress("UNUSED_PARAMETER") set
+
+    override fun draw(canvas: Canvas) {
+        val side = bounds.width()
+        if (side <= 0) return
+        val spreadPx = Ui.u(spread)
+        val disc = (side - 2 * spreadPx).coerceAtLeast(1)
+        val radius = disc / 2f
+        val cx = bounds.exactCenterX()
+        val cy = bounds.exactCenterY()
+        val pressed = state.contains(android.R.attr.state_pressed)
+        val focused = state.contains(android.R.attr.state_focused)
+        val selected = state.contains(android.R.attr.state_selected)
+
+        val shadow = if (cast) ShadowLayer.drop(disc, spreadPx, alpha) else ShadowLayer.contact(disc, spreadPx, alpha)
+        // Aucun décalage au placement : le bitmap occupe exactement la vue, et le moindre
+        // décalage ferait rogner son bas par la limite de la vue — d'où la ligne franche.
+        canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy - shadow.height / 2f, null)
+
+        fill.color = when {
+            selected -> T.BRAND
+            pressed -> T.SURFACE2
+            else -> face
+        }
+        canvas.drawCircle(cx, cy, radius, fill)
+        // Filet discret : une pastille blanche posée sur un cadran blanc doit rester lisible.
+        ring.color = T.STROKE
+        ring.strokeWidth = Ui.uf(T.Line.HAIR)
+        canvas.drawCircle(cx, cy, radius - ring.strokeWidth / 2f, ring)
+        if (focused) {
+            ring.color = if (selected) T.SURFACE else T.BRAND
+            ring.strokeWidth = Ui.uf(T.Line.FOCUS)
+            canvas.drawCircle(cx, cy, radius - ring.strokeWidth / 2f, ring)
+        }
+    }
+
+    override fun setAlpha(alpha: Int) { fill.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(colorFilter: ColorFilter?) { fill.colorFilter = colorFilter; invalidateSelf() }
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+/** Disque de bouton : la vue réserve le débord nécessaire à la pénombre. */
+class SoftCircle(
+    context: Context,
+    spread: Int = 5,
+    alpha: Int = 46,
+    cast: Boolean = false,
+    face: Int = T.BUTTON_FACE,
+    flat: Boolean = false,
+) : FrameLayout(context) {
+    init {
+        isClickable = true
+        isFocusable = true
+        // Style plat de la référence : pas de disque blanc, seulement l'icône sur la surface.
+        background = if (flat) Ui.pressable(Ui.round(0, T.Radius.CARD_SM), T.Radius.CARD_SM)
+        else DiscBackground(spread, alpha, cast, face)
+    }
+}
+
+/** Surface claire réutilisable, sans élévation ni ombre dynamique. */
+class SurfaceCard(context: Context, radius: Float = T.Radius.CARD) : LinearLayout(context) {
+    init {
+        orientation = VERTICAL
+        background = Ui.round(T.SURFACE, radius, T.STROKE, T.Line.HAIR)
+        setPadding(Ui.u(T.Space.S20), Ui.u(T.Space.S16), Ui.u(T.Space.S20), Ui.u(T.Space.S16))
+    }
+}
+
+/** Bouton circulaire icône + libellé discret. Un libellé vide produit un bouton compact. */
+class RoundButton(
+    context: Context,
+    iconKind: Icon.Kind,
+    label: String = "",
+    size: Int = 67,
+    private val castShadow: Boolean = false,
+    private val shadowAlpha: Int? = null,
+    private val flat: Boolean = false,
+    private val action: () -> Unit = {},
+) : LinearLayout(context) {
+    private val spread = if (size < 64) 6 else 9
+
+    /** Taille réellement occupée : le disque plus la place de sa pénombre. */
+    val outerSize: Int = size + 2 * spread
+    private val circle = SoftCircle(
+        context,
+        spread = spread,
+        alpha = shadowAlpha ?: 32,
+        cast = castShadow,
+        face = if (castShadow) T.BUTTON_FACE else T.SURFACE,
+        flat = flat,
+    )
+    private val icon = Icon(context, iconKind, T.BRAND)
+    private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        circle.addView(icon, Ui.flp(Ui.u(if (size < 64) 22 else 30), Ui.u(if (size < 64) 22 else 30), Gravity.CENTER))
+        circle.contentDescription = label
+        circle.setOnClickListener { if (isEnabled) action() }
+        addView(circle, LinearLayout.LayoutParams(Ui.u(outerSize), Ui.u(outerSize)))
+        caption?.let { addView(it, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1)) }
+        isFocusable = false
+        isClickable = false
+        contentDescription = label
+    }
+
+    fun select(selected: Boolean) {
+        circle.isSelected = selected
+        icon.color = if (selected) T.SURFACE else T.BRAND
+        invalidate()
+        caption?.setTextColor(if (selected) T.BRAND else T.TEXT2)
+    }
+
+    fun setButtonEnabled(enabled: Boolean) {
+        isEnabled = enabled
+        circle.isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+
+    fun focusView(): View = circle
+}
+
+/**
+ * Bascule unique : le libellé et l'icône décrivent **l'état courant**, un appui passe à l'autre.
+ * Remplace la paire de boutons qui affichait les deux choix à la fois.
+ */
+class ToggleRoundButton(
+    context: Context,
+    size: Int = 67,
+    private val flat: Boolean = false,
+    private val action: () -> Unit = {},
+) : LinearLayout(context) {
+    private val spread = 9
+    private val circle = SoftCircle(context, spread = spread, alpha = 58, flat = flat)
+    private val icon = Icon(context, Icon.Kind.SYNC, T.BRAND)
+    private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
+    private var on = false
+    private var onKind = Icon.Kind.SYNC
+    private var offKind = Icon.Kind.REVERSE
+    private var onLabel = ""
+    private var offLabel = ""
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 44 else 30), Ui.u(if (flat) 44 else 30), Gravity.CENTER))
+        circle.setOnClickListener {
+            if (isEnabled) {
+                on = !on
+                action()
+                apply()
+            }
+        }
+        addView(circle, LinearLayout.LayoutParams(Ui.u(size + 2 * spread), Ui.u(size + 2 * spread)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
+        isFocusable = false
+        isClickable = false
+    }
+
+    /** Libellés et icônes des deux états ; `on` désigne l'état alternatif. */
+    fun configure(onLabel: String, onKind: Icon.Kind, offLabel: String, offKind: Icon.Kind) {
+        this.onLabel = onLabel
+        this.onKind = onKind
+        this.offLabel = offLabel
+        this.offKind = offKind
+        apply()
+    }
+
+    /** Aligne l'affichage sur l'état réel du modèle (sans déclencher l'action). */
+    fun set(active: Boolean) {
+        if (on == active) return
+        on = active
+        apply()
+    }
+
+    fun setButtonEnabled(enabled: Boolean) {
+        isEnabled = enabled
+        circle.isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+
+    fun focusView(): View = circle
+
+    private fun apply() {
+        icon.set(if (on) onKind else offKind)
+        caption.text = if (on) onLabel else offLabel
+        circle.isSelected = on
+        icon.color = if (on) T.SURFACE else T.BRAND
+        caption.setTextColor(if (on) T.BRAND else T.TEXT2)
+        circle.contentDescription = caption.text
+    }
+}
+
+/** Bouton rotatif réglable au doigt : graduations externes, repère tournant, valeur fixe. */
+class Dial(
+    context: Context,
+    private val topIcon: Icon.Kind,
+    bottomIcon: Icon.Kind? = null,
+    val size: Int = SIZE,
+) : FrameLayout(context) {
+    private val face = DialFace(context)
+    private val icon = Icon(context, topIcon, T.TEXT2)
+
+    var onSelect: () -> Unit = {}
+    var onMinus: () -> Unit = {}
+    var onPlus: () -> Unit = {}
+    var repeatEnabled: Boolean = true
+
+    init {
+        addView(face, LayoutParams(Ui.u(size), Ui.u(size), Gravity.CENTER))
+        // Un seul pictogramme, au-dessus de la valeur ; il ne tourne pas avec le repère.
+        val iconSize = (size * DISC_RATIO * 0.20f).toInt()
+        addView(
+            icon,
+            LayoutParams(Ui.u(iconSize), Ui.u(iconSize), Gravity.CENTER).apply {
+                topMargin = -Ui.u((size * DISC_RATIO * 0.55f).toInt())
+            },
+        )
+        face.onRotateStep = { direction -> if (direction > 0) onPlus() else onMinus() }
+        face.isFocusable = true
+        face.isClickable = true
+        face.setOnClickListener { onSelect() }
+        face.setOnFocusChangeListener { _, _ -> onSelect() }
+    }
+
+    fun set(value: String, unit: String = "", legend: String = "", progress: Float = 0f, marker: Float? = null) {
+        face.update(value, unit, legend, progress, marker)
+        // Le bouton personnalisé reste lisible par TalkBack, et sa valeur est vérifiable.
+        face.contentDescription = listOf(value, unit, legend).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    fun select(selected: Boolean) {
+        face.isSelected = selected
+        face.invalidate()
+    }
+
+    fun focusControl(): View = face
+
+    private class DialFace(context: Context) : View(context) {
+        private var value = "0"
+        private var unit = ""
+        private var legend = ""
+        private var progress = 0f
+        private var marker: Float? = null
+        private var staticLayer: Bitmap? = null
+        private var lastAngle = Float.NaN
+        private var accumulated = 0f
+        private var pointerPos = 0f
+        private var pointerTarget = 0f
+        private var animating = false
+
+        private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val bandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val tickShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
+        private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
+        private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+        private val ringBounds = RectF()
+        // Instances réutilisées : l'animation et le décompte n'allouent aucune police par image.
+        private val mediumTypeface = T.typeface(T.TypefaceRole.MEDIUM)
+        private val regularTypeface = T.typeface(T.TypefaceRole.REGULAR)
+
+        var onRotateStep: ((Int) -> Unit)? = null
+
+        private val animTick = object : Runnable {
+            override fun run() {
+                val delta = pointerTarget - pointerPos
+                if (delta > -0.001f && delta < 0.001f) {
+                    pointerPos = pointerTarget
+                    animating = false
+                    invalidate()
+                } else {
+                    pointerPos += delta * 0.28f
+                    invalidate()
+                    postOnAnimation(this)
+                }
+            }
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastAngle = angleOf(event)
+                    accumulated = 0f
+                    isPressed = true
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val angle = angleOf(event)
+                    if (!lastAngle.isNaN()) {
+                        var delta = angle - lastAngle
+                        if (delta > 180f) delta -= 360f
+                        if (delta < -180f) delta += 360f
+                        accumulated += delta
+                        while (accumulated >= STEP_DEGREES) {
+                            accumulated -= STEP_DEGREES
+                            onRotateStep?.invoke(1)
+                        }
+                        while (accumulated <= -STEP_DEGREES) {
+                            accumulated += STEP_DEGREES
+                            onRotateStep?.invoke(-1)
+                        }
+                    }
+                    lastAngle = angle
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    isPressed = false
+                    lastAngle = Float.NaN
+                    performClick()
+                    return true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    lastAngle = Float.NaN
+                    return true
+                }
+            }
+            return super.onTouchEvent(event)
+        }
+
+        private fun angleOf(event: MotionEvent): Float = Math.toDegrees(
+            Math.atan2(
+                (event.y - height / 2f).toDouble(),
+                (event.x - width / 2f).toDouble(),
+            ),
+        ).toFloat()
+
+        fun update(value: String, unit: String, legend: String, progress: Float, marker: Float?) {
+            if (this.value == value && this.unit == unit && this.legend == legend &&
+                this.progress == progress && this.marker == marker) return
+            this.value = value
+            this.unit = unit
+            this.legend = legend
+            this.progress = progress.coerceIn(0f, 1f)
+            this.marker = marker?.coerceIn(0f, 1f)
+            pointerTarget = this.marker ?: this.progress
+            if (!animating && pointerPos != pointerTarget) {
+                animating = true
+                postOnAnimation(animTick)
+            }
+            invalidate()
+        }
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            staticLayer?.recycle()
+            staticLayer = null
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val size = minOf(width, height).toFloat()
+            if (size <= 0f) return
+            val cx = width / 2f
+            val cy = height / 2f
+            val r = size * DISC_RATIO
+
+            // Ombre et matière sont cuites ensemble dans la couche : rien à calculer par image.
+            canvas.drawBitmap(staticLayer ?: buildLayer(cx, cy, r).also { staticLayer = it }, 0f, 0f, null)
+
+            // Un seul anneau : piste et progression sur le chemin des graduations.
+            val ringRadius = r + Ui.uf(9f)
+            ringBounds.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
+            ringPaint.strokeWidth = Ui.uf(2f)
+            ringPaint.color = if (isFocused || isSelected) withAlpha(T.BOTANICAL, 0x6A) else T.ARC_TRACK
+            canvas.drawArc(ringBounds, START_ANGLE, SWEEP_ANGLE, false, ringPaint)
+            ringPaint.color = T.BRAND
+            if (progress > 0f) canvas.drawArc(ringBounds, START_ANGLE, SWEEP_ANGLE * progress, false, ringPaint)
+
+            // Le repère appartient au disque : un ergot court, arrondi et vert sur sa tranche.
+            // Ce n'est ni un triangle extérieur, ni une encoche qui perce le corps du bouton.
+            val angle = Math.toRadians((START_ANGLE + SWEEP_ANGLE * pointerPos).toDouble())
+            val cos = Math.cos(angle).toFloat()
+            val sin = Math.sin(angle).toFloat()
+            ringPaint.strokeWidth = Ui.uf(5f)
+            ringPaint.color = T.BRAND
+            canvas.drawLine(
+                cx + cos * (r - Ui.uf(7f)), cy + sin * (r - Ui.uf(7f)),
+                cx + cos * (r + Ui.uf(3f)), cy + sin * (r + Ui.uf(3f)),
+                ringPaint,
+            )
+            // Petit centre ivoire dans l'ergot, fin comme une gravure plutôt qu'un bouton vert.
+            ringPaint.strokeWidth = Ui.uf(1.2f)
+            ringPaint.color = T.BUTTON_FACE
+            canvas.drawLine(
+                cx + cos * (r - Ui.uf(4f)), cy + sin * (r - Ui.uf(4f)),
+                cx + cos * (r - Ui.uf(1f)), cy + sin * (r - Ui.uf(1f)),
+                ringPaint,
+            )
+
+            drawReadout(canvas, cx, cy, r)
+        }
+
+        /**
+         * Matière, double contour, graduations et leurs ombres sont composées une seule fois
+         * dans ce bitmap, recyclé uniquement quand la taille change. Rien n'est recalculé
+         * pendant l'animation : seuls la bague de progression et le repère sont redessinés.
+         */
+        private fun buildLayer(cx: Float, cy: Float, r: Float): Bitmap {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+
+            // --- 0. Ombre portée du bouton sur le fond : c'est elle qui le décolle de la page.
+            //     Dessinée ici, et non dans onDraw, pour qu'elle soit cuite avec le reste.
+            val dropShadow = ShadowLayer.drop((2 * r).toInt(), Ui.u(18), 78)
+            canvas.drawBitmap(dropShadow, cx - dropShadow.width / 2f, cy + Ui.uf(7f) - dropShadow.height / 2f, null)
+
+            // --- 1. Le bouton est fait de DEUX cylindres concentriques séparés par une
+            //     rainure en V. Le rayon extérieur est celui de la vue ; chaque anneau a
+            //     sa propre lumière, ce qui fait lire le double contour même de loin.
+
+            // 1a. Anneau extérieur : dégradé diagonal, lumière en haut-gauche, ombre en bas-droite.
+            bandPaint.style = Paint.Style.FILL
+            bandPaint.shader = LinearGradient(
+                cx - r * 0.7f, cy - r, cx + r * 0.7f, cy + r,
+                intArrayOf(BAND_TOP, BAND_MID, BAND_BOTTOM),
+                floatArrayOf(0f, 0.45f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, r, bandPaint)
+            bandPaint.shader = null
+
+            // 1b. Arête externe fine et sombre : le bord du métal.
+            edgePaint.color = withAlpha(EDGE_DARK, 0xC0)
+            edgePaint.strokeWidth = Ui.uf(1f)
+            canvas.drawCircle(cx, cy, r - Ui.uf(0.5f), edgePaint)
+
+            // 2. Rainure : un anneau NETTEMENT plus sombre que les deux anneaux, puisque
+            //    c'est le creux entre eux. C'est le contraste, pas la couleur, qui la fait lire.
+            val grooveOuter = r - Ui.uf(BAND_WIDTH)
+            bandPaint.color = GROOVE
+            canvas.drawCircle(cx, cy, grooveOuter, bandPaint)
+            // Fond de la rainure encore plus sombre sur 40 % de sa largeur : donne le V.
+            bandPaint.color = GROOVE_DEEP
+            canvas.drawCircle(cx, cy, grooveOuter - Ui.uf(GAP_WIDTH * 0.3f), bandPaint)
+            // Lèvre intérieure de la rainure : lumière rasante sur le cylindre intérieur.
+            edgePaint.color = withAlpha(GLOW, 0xA0)
+            edgePaint.strokeWidth = Ui.uf(0.9f)
+            canvas.drawCircle(cx, cy, grooveOuter - Ui.uf(GAP_WIDTH), edgePaint)
+
+            // --- 3. La face : une calotte légèrement enfoncée, éclairée d'en haut.
+            //     Le dégradé est LINÉAIRE et continu du bord haut au bord bas, sans pic au
+            //     milieu : c'est ce qui distingue une surface courbe d'un aplat dégradé.
+            val faceR = grooveOuter - Ui.uf(GAP_WIDTH)
+            facePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(FACE_EDGE_TOP, FACE_TOP, FACE_BOTTOM, FACE_EDGE_BOTTOM),
+                floatArrayOf(0f, 0.30f, 0.72f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR, facePaint)
+            facePaint.shader = null
+
+            // --- 3b. Rebord du creux : l'ombre du bord haut et la lumière du bord bas,
+            //     portées par un anneau dégradé. C'est ce qui « enfonce » la face.
+            edgePaint.strokeWidth = Ui.uf(3f)
+            edgePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(withAlpha(CUP_DARK, 0x70), withAlpha(CUP_DARK, 0x00),
+                    withAlpha(CUP_LIGHT, 0x00), withAlpha(CUP_LIGHT, 0x80)),
+                floatArrayOf(0f, 0.40f, 0.62f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR - Ui.uf(1.5f), edgePaint)
+            edgePaint.shader = null
+            facePaint.shader = null
+
+            // --- 4. Creux 3D : le disque est légèrement enfoncé. L'ombre tombe du côté
+            //     haut-gauche, la lumière remonte en bas-droite, comme une coupelle éclairée.
+            facePaint.shader = LinearGradient(
+                cx - faceR * 0.7f, cy - faceR, cx + faceR * 0.7f, cy + faceR,
+                intArrayOf(withAlpha(SHADE, 0x4A), 0x00000000, withAlpha(GLOW, 0x66)),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR, facePaint)
+            facePaint.shader = null
+
+            // --- 5. Arête du creux : ombre en haut, lumière en bas, comme une cuvette.
+            edgePaint.strokeWidth = Ui.uf(1.4f)
+            edgePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(withAlpha(SHADE, 0x62), withAlpha(SHADE, 0x00), withAlpha(GLOW, 0x8C)),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR - Ui.uf(0.7f), edgePaint)
+            edgePaint.shader = null
+
+            // --- 6. Graduations : chacune porte son ombre vers le bas-droit avant le trait.
+            val tickCount = 54
+            for (i in 0..tickCount) {
+                val angle = Math.toRadians((START_ANGLE + SWEEP_ANGLE * i / tickCount.toFloat()).toDouble())
+                val cos = Math.cos(angle).toFloat()
+                val sin = Math.sin(angle).toFloat()
+                val inner = r + Ui.uf(TICK_START)
+                val outer = r + Ui.uf(TICK_END)
+                val major = i % 9 == 0
+
+                tickShadow.strokeWidth = Ui.uf(if (major) 1.8f else 1.4f)
+                tickShadow.color = withAlpha(SHADE, if (major) 0x74 else 0x58)
+                canvas.drawLine(
+                    cx + inner * cos + Ui.uf(1.1f), cy + inner * sin + Ui.uf(1.6f),
+                    cx + outer * cos + Ui.uf(1.1f), cy + outer * sin + Ui.uf(1.6f),
+                    tickShadow,
+                )
+
+                tickPaint.strokeWidth = Ui.uf(if (major) 1.6f else 1.1f)
+                tickPaint.color = withAlpha(TICK_COLOR, if (major) 0xC8 else 0x8E)
+                canvas.drawLine(
+                    cx + inner * cos, cy + inner * sin,
+                    cx + outer * cos, cy + outer * sin,
+                    tickPaint,
+                )
+            }
+            return bitmap
+        }
+
+        /** Hiérarchie fixe : icône au sommet, valeur au centre, légende dessous. */
+        private fun drawReadout(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+            valuePaint.color = T.TEXT
+            valuePaint.typeface = mediumTypeface
+            var valueSize = r * 0.48f
+            valuePaint.textSize = Ui.uf(valueSize)
+            val available = r * 1.48f
+            while (valuePaint.measureText(value) > available && valueSize > r * 0.30f) {
+                valueSize -= 1f
+                valuePaint.textSize = Ui.uf(valueSize)
+            }
+            unitPaint.color = T.TEXT2
+            unitPaint.typeface = regularTypeface
+            unitPaint.textSize = Ui.uf(r * 0.19f)
+            val unitWidth = unitPaint.measureText(unit)
+            val valueWidth = valuePaint.measureText(value)
+            val gap = if (unit.isEmpty()) 0f else Ui.uf(4f)
+            val baseline = cy + r * 0.12f
+            var start = cx - (valueWidth + gap + unitWidth) / 2f
+            canvas.drawText(value, start, baseline, valuePaint)
+            if (unit.isNotEmpty()) canvas.drawText(unit, start + valueWidth + gap, baseline, unitPaint)
+
+            if (legend.isEmpty()) return
+            legendPaint.color = T.TEXT2
+            legendPaint.typeface = regularTypeface
+            legendPaint.textSize = Ui.uf(r * 0.145f)
+            val line = fit(legend, r * 1.45f, legendPaint)
+            canvas.drawText(line, cx, cy + r * 0.47f, legendPaint)
+        }
+
+        private fun fit(text: String, maxWidth: Float, paint: Paint): String {
+            if (paint.measureText(text) <= maxWidth) return text
+            var shortened = text
+            while (shortened.length > 1 && paint.measureText(shortened + "…") > maxWidth) {
+                shortened = shortened.dropLast(1)
+            }
+            return shortened + "…"
+        }
+
+        private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
+
+        private companion object {
+            // Relief du bouton, en unités de la grille 1024×600.
+            const val BAND_WIDTH = 7.0f
+            const val GAP_WIDTH = 2.6f
+            const val TICK_START = 5.0f
+            const val TICK_END = 22.0f
+
+            const val BAND_TOP = 0xFFFAF5EC.toInt()
+            const val BAND_MID = 0xFFEDE3D2.toInt()
+            const val BAND_BOTTOM = 0xFFC9B79B.toInt()
+            const val EDGE_DARK = 0xFF6E5B40.toInt()
+            const val GROOVE = 0xFFB5A180.toInt()
+            const val GROOVE_DEEP = 0xFF96825F.toInt()
+            const val FACE_EDGE_TOP = 0xFFF2E8D6.toInt()
+            const val FACE_TOP = 0xFFFFFFFF.toInt()
+            const val FACE_BOTTOM = 0xFFE8DDC8.toInt()
+            const val FACE_EDGE_BOTTOM = 0xFFD6C6A8.toInt()
+            const val CUP_DARK = 0xFF4A3722.toInt()
+            const val CUP_LIGHT = 0xFFFFFFFF.toInt()
+            const val SHADE = 0xFF5B4A33.toInt()
+            const val GLOW = 0xFFFFFFFF.toInt()
+            const val RING_INNER_COLOR = 0xFFB3A183.toInt()
+            const val TICK_COLOR = 0xFF7D6E57.toInt()
+
+            const val START_ANGLE = 135f
+            const val SWEEP_ANGLE = 270f
+            const val STEP_DEGREES = 3f
+        }
+    }
+
+    companion object {
+        /** Diamètre utile : 80 % de la vue, la couronne ne rogne plus le bouton. */
+        const val DISC_RATIO = 0.40f
+        /** Taille de repli du cadran, en unités de la grille 1024×600. */
+        const val SIZE = 258
+    }
+}
+
+/** Contrôle principal tactile : dégradé statique, libellé large, focus explicite. */
+/** Bouton de lecture circulaire, comme sur la référence : anneau vert et triangle. */
+class PlayButton(context: Context, private val action: () -> Unit) : FrameLayout(context) {
+    private val ring = SoftCircle(context, spread = 8, alpha = 30)
+    private val icon = Icon(context, Icon.Kind.PLAY, T.BRAND)
+
+    init {
+        // Le disque ne doit pas capter le toucher : c'est le bouton entier qui le reçoit.
+        ring.isClickable = false
+        ring.isFocusable = false
+        ring.addView(icon, Ui.flp(Ui.u(38), Ui.u(38), Gravity.CENTER))
+        ring.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(T.SURFACE)
+            setStroke(Ui.u(T.Line.FOCUS), T.BRAND)
+        }
+        addView(ring, LayoutParams(Ui.u(96), Ui.u(96)))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { if (isEnabled) action() }
+    }
+
+    fun setEnabledState(enabled: Boolean) {
+        isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+}
+
+class PrimaryButton(
+    context: Context,
+    label: String,
+    private val action: () -> Unit,
+) : LinearLayout(context) {
+    private val icon = Icon(context, Icon.Kind.PLAY, T.SURFACE)
+    private val title = Ui.text(context, label, T.Type.H3, T.SURFACE, Ui.MEDIUM)
+
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER
+        setPadding(Ui.u(T.Space.S24), 0, Ui.u(T.Space.S24), 0)
+        minimumHeight = Ui.u(86)
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30), r = 12))
+        addView(title)
+        Focusable.gradientButton(
+            this, T.Radius.PILL, T.START_TOP, T.START_BOTTOM, T.START_TOP_PRESSED, T.START_BOTTOM_PRESSED,
+        )
+        isClickable = true
+        setOnClickListener { if (isEnabled) action() }
+    }
+
+    fun setLabel(label: String) { title.text = label }
+
+    fun setEnabledState(enabled: Boolean) {
+        isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+}
+
+/** Turbo : icône et libellé circulaires, avec sémantique d'appui maintenu préservée. */
+class HoldRoundButton(
+    context: Context,
+    label: String,
+    private val onDown: () -> Unit,
+    private val onUp: () -> Unit,
+    private val flat: Boolean = false,
+) : LinearLayout(context) {
+    private val spread = 9
+    private val circle = SoftCircle(context, spread = spread, alpha = 58, flat = flat)
+    private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
+    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
+    private var held = false
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 44 else 30), Ui.u(if (flat) 44 else 30), Gravity.CENTER))
+        circle.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!held && isEnabled) {
+                        held = true
+                        view.isPressed = true
+                        circle.background = Ui.round(T.WARN, 31f, T.WARN, T.Line.HAIR)
+                        icon.color = T.TEXT
+                        onDown()
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (held) {
+                        held = false
+                        view.isPressed = false
+                        icon.color = T.BRAND
+                        onUp()
+                    }
+                }
+            }
+            true
+        }
+        circle.setOnClickListener { /* Turbo est volontairement une action maintenue. */ }
+        addView(circle, LinearLayout.LayoutParams(Ui.u(67 + 2 * spread), Ui.u(67 + 2 * spread)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 1))
+        isFocusable = false
+    }
+
+    fun setButtonEnabled(enabled: Boolean) {
+        circle.isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+        if (!enabled && held) {
+            held = false
+            onUp()
+        }
+    }
+}
+
+/** Balance actuelle, indépendante des commandes de cuisson. */
+class WeightBadge(context: Context) : LinearLayout(context) {
+    private val icon = Icon(context, Icon.Kind.SCALE, T.TEXT2)
+    private val value = Ui.text(context, "—", T.Type.H1, T.TEXT, Ui.MEDIUM)
+    private val unit = Ui.text(context, "g", T.Type.SMALL, T.TEXT2, Ui.REGULAR)
+    private val status = Ui.text(context, tr("Base non connectée"), T.Type.CAPTION, T.TEXT2)
+    private val underline = View(context)
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER
+        background = Ui.round(T.SURFACE, T.Radius.CARD, T.STROKE, T.Line.HAIR)
+        setPadding(Ui.u(12), Ui.u(12), Ui.u(12), Ui.u(12))
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30)))
+        val row = Ui.horizontal(context, Gravity.CENTER)
+        row.addView(value)
+        row.addView(unit, Ui.lp(Ui.WRAP, Ui.WRAP, l = 4, b = 6))
+        addView(row, Ui.lp(Ui.WRAP, Ui.WRAP, t = 2))
+        underline.setBackgroundColor(T.BOTANICAL)
+        addView(underline, Ui.lp(Ui.u(72), Ui.u(3), t = 4))
+        addView(status, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
+    }
+
+    fun set(weightG: Int, online: Boolean) {
+        value.text = if (online) "$weightG" else "—"
+        unit.text = if (online) "g" else ""
+        status.text = if (online) tr("Balance") else tr("Base non connectée")
+        // La phrase d'origine est réutilisée comme description lue par les lecteurs d'écran.
+        contentDescription = if (online) tr("Balance : %d g", weightG) else tr("Base non connectée")
+        value.setTextColor(if (online) T.TEXT else T.TEXT2)
+        icon.color = if (online) T.BRAND else T.TEXT2
+        underline.visibility = if (online) View.VISIBLE else View.INVISIBLE
+    }
+}
+
+/** Mini-cadran d'information : un disque de 90 pour une valeur mesurée (poids, température). */
+class MiniCircle(
+    context: Context,
+    iconKind: Icon.Kind,
+    private val showBar: Boolean = false,
+    private val size: Int = 100,
+) : FrameLayout(context) {
+    private val face = SoftCircle(context, spread = 5, alpha = 36)
+    private val icon = Icon(context, iconKind, T.TEXT2)
+    private val value = Ui.text(context, "—", T.Type.MICRO, T.TEXT, Ui.MEDIUM)
+    private val bar = View(context).apply { setBackgroundColor(T.BOTANICAL) }
+
+    init {
+        val iconSize = (size * 0.34f).toInt()
+        val barWidth = (size * 0.42f).toInt()
+        val column = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
+        column.addView(icon, Ui.lp(Ui.u(iconSize), Ui.u(iconSize)))
+        // Une seule ligne : sans largeur bornée, « 22 °C » se repliait hors du disque.
+        value.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.uf(size * 0.24f))
+        value.isSingleLine = true
+        value.gravity = Gravity.CENTER
+        column.addView(value, Ui.lp(Ui.u((size * 0.94f).toInt()), Ui.WRAP, t = 1))
+        if (showBar) column.addView(bar, Ui.lp(Ui.u(barWidth), Ui.u(3), t = 2))
+        face.addView(column, FrameLayout.LayoutParams(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
+        addView(face, FrameLayout.LayoutParams(Ui.u(size), Ui.u(size)))
+    }
+
+    fun set(text: String, active: Boolean) {
+        value.text = text
+        value.setTextColor(if (active) T.TEXT else T.TEXT3)
+        icon.color = if (active) T.BRAND else T.TEXT2
+        if (showBar) bar.visibility = if (active) View.VISIBLE else View.INVISIBLE
+    }
+}
+
+/** Raccourci du bandeau bas : icône et libellé, action simple ou maintenue. */
+class StripAction(
+    context: Context,
+    iconKind: Icon.Kind,
+    label: String,
+    private val onClick: (() -> Unit)? = null,
+    private val onDown: (() -> Unit)? = null,
+    private val onUp: (() -> Unit)? = null,
+) : LinearLayout(context) {
+    private val icon = Icon(context, iconKind, T.BRAND)
+    private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
+    private var held = false
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER
+        setPadding(Ui.u(8), Ui.u(6), Ui.u(8), Ui.u(6))
+        addView(icon, Ui.lp(Ui.u(30), Ui.u(30)))
+        addView(caption, Ui.lp(Ui.WRAP, Ui.WRAP, t = 4))
+        isClickable = true
+        isFocusable = true
+        background = Ui.pressable(Ui.round(0, T.Radius.CARD_SM), T.Radius.CARD_SM)
+        if (onDown != null || onUp != null) {
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (!held) {
+                            held = true
+                            view.isPressed = true
+                            onDown?.invoke()
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (held) {
+                            held = false
+                            view.isPressed = false
+                            onUp?.invoke()
+                        }
+                    }
+                }
+                true
+            }
+        } else {
+            setOnClickListener { onClick?.invoke() }
+        }
+    }
+}
+
+/** Filet de séparation discret, sans ombre. */
+class SectionDivider(context: Context) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        paint.color = T.STROKE
+        paint.strokeWidth = Ui.uf(T.Line.HAIR)
+        canvas.drawLine(0f, height / 2f, width.toFloat(), height / 2f, paint)
+    }
+}
+
+/** Puce réutilisable pour les écrans dont la mise en page est conservée. */
+object Chip {
+    fun create(context: Context, label: String, icon: Icon.Kind? = null): LinearLayout =
+        Ui.chip(context, label, icon, T.TEXT2, T.SURFACE2, T.Type.SMALL)
+}

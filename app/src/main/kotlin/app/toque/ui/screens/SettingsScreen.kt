@@ -186,10 +186,12 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         val sw = Ui.text(c, "", 16f, Ui.TEXT, Ui.MEDIUM).apply { gravity = Gravity.CENTER }
         fun paint() {
             sw.text = if (state) tr("Oui") else tr("Non")
-            sw.setTextColor(if (state) 0xFF1A0E05.toInt() else Ui.TEXT2)
-            sw.background = if (state) Ui.round(Ui.ACCENT, 24f) else Ui.round(Ui.SURFACE3, 24f)
+            sw.setTextColor(if (state) Ui.SURFACE else Ui.TEXT2)
+            sw.isSelected = state
+            Ui.focusable(sw, 24f, normal = if (state) Ui.ACCENT else Ui.SURFACE3, pressed = Ui.SURFACE2, selected = Ui.ACCENT)
         }
         paint()
+        sw.setOnFocusChangeListener { _, _ -> paint() }
         sw.setOnClickListener { state = !state; paint(); onChange(state) }
         row.addView(sw, LinearLayout.LayoutParams(Ui.u(84), Ui.u(46)))
         return row
@@ -200,7 +202,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         row.setPadding(0, Ui.u(14), 0, Ui.u(14))
         row.addView(Ui.text(c, label, 18f, Ui.TEXT), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         row.addView(Icon(c, Icon.Kind.CHEVRON, Ui.TEXT3), LinearLayout.LayoutParams(Ui.u(20), Ui.u(20)))
-        row.background = Ui.pressable(Ui.round(0, 8f), 8f)
+        Ui.focusable(row, 8f, normal = android.graphics.Color.TRANSPARENT, pressed = Ui.SURFACE3)
         row.isClickable = true
         row.setOnClickListener { onClick() }
         return row
@@ -210,7 +212,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
     private fun dropdown(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit): View {
         val box = Ui.horizontal(c)
         box.setPadding(Ui.u(16), 0, Ui.u(14), 0)
-        box.background = Ui.pressable(Ui.round(Ui.SURFACE2, 16f, Ui.STROKE, 1f), 16f)
+        Ui.focusable(box, 16f, normal = Ui.SURFACE2, pressed = Ui.SURFACE3)
         val label = options.firstOrNull { it.first == selected }?.second ?: options.first().second
         box.addView(Ui.text(c, label, 19f, Ui.TEXT), LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         box.addView(Icon(c, Icon.Kind.CHEVRON, Ui.TEXT2).apply { rotation = 90f }, LinearLayout.LayoutParams(Ui.u(22), Ui.u(22)))

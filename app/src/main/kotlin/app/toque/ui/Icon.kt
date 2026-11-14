@@ -12,7 +12,7 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
     enum class Kind {
         BACK, SEARCH, PLAY, PAUSE, STOP, THERMO, SPEED, CLOCK, REVERSE, SCALE, BOOK, STAR, STAR_FILLED,
         SETTINGS, PLUS, MINUS, CHECK, CLOSE, KNEAD, STEAM, FLAME, BOLT, SYNC, LID, WARNING, HOME, WHISK,
-        CHEVRON, LINK, INFO, POT, TIMER,
+        CHEVRON, LINK, INFO, POT, TIMER, BLADE, MENU, CHEF_HAT,
     }
 
     var color: Int = color
@@ -145,6 +145,30 @@ class Icon(context: Context, var kind: Kind, color: Int) : View(context) {
                 canvas.drawLine(12f, 21.5f, 12f, 15f, stroke)
                 rect.set(7f, 2.5f, 17f, 16f); canvas.drawOval(rect, stroke)
                 rect.set(9.5f, 2.5f, 14.5f, 16f); canvas.drawOval(rect, stroke)
+            }
+            Kind.BLADE -> {
+                for (i in 0 until 4) {
+                    canvas.save()
+                    canvas.rotate(i * 90f, 12f, 12f)
+                    p.reset()
+                    p.moveTo(12f, 12f)
+                    p.quadTo(15.5f, 6.5f, 12f, 2.5f)
+                    p.quadTo(8.5f, 6.5f, 12f, 12f)
+                    p.close()
+                    canvas.drawPath(p, stroke)
+                    canvas.restore()
+                }
+            }
+            Kind.MENU -> {
+                canvas.drawLine(4f, 6f, 20f, 6f, stroke)
+                canvas.drawLine(4f, 12f, 20f, 12f, stroke)
+                canvas.drawLine(4f, 18f, 20f, 18f, stroke)
+            }
+            Kind.CHEF_HAT -> {
+                p.moveTo(5f, 11f); p.cubicTo(2f, 7f, 5f, 3f, 9f, 5f)
+                p.cubicTo(10f, 1f, 16f, 1f, 17f, 5f); p.cubicTo(21f, 4f, 23f, 9f, 19f, 12f)
+                p.lineTo(19f, 19f); p.lineTo(5f, 19f); p.close()
+                canvas.drawPath(p, stroke); canvas.drawLine(5f, 15f, 19f, 15f, stroke)
             }
             Kind.LINK -> { canvas.drawCircle(12f, 12f, 4f, fill); canvas.drawCircle(12f, 12f, 8.5f, stroke) }
             Kind.INFO -> { canvas.drawCircle(12f, 12f, 9f, stroke); canvas.drawLine(12f, 11f, 12f, 16.5f, stroke); canvas.drawCircle(12f, 7.8f, 1.2f, fill) }

@@ -32,7 +32,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         val left = Ui.vertical(c)
         val header = FrameLayout(c)
         header.background = Ui.gradient(Ui.placeholderColors(recipe.title), 24f)
-        header.addView(Ui.text(c, Ui.initials(recipe.title), 70f, 0x44FFFFFF, Ui.THIN), Ui.flp(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
+        header.addView(Ui.text(c, Ui.initials(recipe.title), 70f, Ui.TEXT3, Ui.THIN), Ui.flp(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
         val img = ImageView(c).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         header.addView(img, Ui.flp())
         header.clipToOutline = true
@@ -190,7 +190,7 @@ class RecipeScreen(a: MainActivity, private val recipe: Recipe) : Screen(a) {
         s.machine?.let { m ->
             val ok = m.valid
             chips.addView(Ui.chip(c, m.summary, if (ok) Icon.Kind.POT else Icon.Kind.WARNING,
-                if (ok) Ui.ACCENT else Ui.WARN, if (ok) Ui.ACCENT_DIM else 0x33FFC14D, 15f))
+                if (ok) Ui.BRAND else Ui.WARN, if (ok) Ui.WASH_BRAND else Ui.WARN_WASH, 15f))
         }
         if (chips.childCount > 0) col.addView(chips, Ui.lp(t = 8))
         row.addView(col, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
