@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
@@ -355,9 +356,15 @@ class ToggleRoundButton(
     }
 }
 
-/** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
-class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
+/** Bouton rotatif réglable au doigt : graduations externes, repère tournant, valeur fixe. */
+class Dial(
+    context: Context,
+    private val topIcon: Icon.Kind,
+    bottomIcon: Icon.Kind? = null,
+    val size: Int = SIZE,
+) : FrameLayout(context) {
     private val face = DialFace(context)
+    private val icon = Icon(context, topIcon, T.TEXT2)
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -365,34 +372,26 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     var repeatEnabled: Boolean = true
 
     init {
-        orientation = VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-        // Icônes proportionnelles au disque : fixes, elles paraissaient perdues sur un grand cadran.
-        val iconSize = (size * 0.11f).toInt().coerceIn(20, 46)
-        val iconMargin = (size * 0.09f).toInt()
-        // L'icône de dessous n'a de place que sur un grand cadran ; sinon elle chevauche la légende.
-        val showBottom = bottomIcon != null && size >= 240
-        face.hasBottomIcon = showBottom
-        val box = FrameLayout(context)
-        box.addView(face, Ui.flp(Ui.u(size), Ui.u(size)))
-        // Référence : une seule icône, placée sous la valeur (au-dessus des − / +).
-        box.addView(
-            Icon(context, topIcon, T.TEXT),
-            Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                bottomMargin = Ui.u(iconMargin)
+        addView(face, LayoutParams(Ui.u(size), Ui.u(size), Gravity.CENTER))
+        // Un seul pictogramme, au-dessus de la valeur ; il ne tourne pas avec le repère.
+        val iconSize = (size * DISC_RATIO * 0.20f).toInt()
+        addView(
+            icon,
+            LayoutParams(Ui.u(iconSize), Ui.u(iconSize), Gravity.CENTER).apply {
+                topMargin = -Ui.u((size * DISC_RATIO * 0.55f).toInt())
             },
         )
-        addView(box, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
-        // Le réglage se fait en tournant le bouton : plus de ligne de − / +.
         face.onRotateStep = { direction -> if (direction > 0) onPlus() else onMinus() }
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
-        face.setOnFocusChangeListener { _, focused -> if (focused) onSelect(); face.invalidate() }
+        face.setOnFocusChangeListener { _, _ -> onSelect() }
     }
 
     fun set(value: String, unit: String = "", legend: String = "", progress: Float = 0f, marker: Float? = null) {
         face.update(value, unit, legend, progress, marker)
+        // Le bouton personnalisé reste lisible par TalkBack, et sa valeur est vérifiable.
+        face.contentDescription = listOf(value, unit, legend).filter { it.isNotBlank() }.joinToString(" ")
     }
 
     fun select(selected: Boolean) {
@@ -402,79 +401,46 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
 
     fun focusControl(): View = face
 
-    private fun repeatOnHold(view: View, action: () -> Unit) {
-        var count = 0
-        val repeat = object : Runnable {
-            override fun run() {
-                if (!view.isPressed || !repeatEnabled || count >= 40) return
-                count++
-                action()
-                view.postDelayed(this, 110)
-            }
-        }
-        view.setOnTouchListener { target, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    count = 0
-                    target.removeCallbacks(repeat)
-                    target.postDelayed(repeat, 450)
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> target.removeCallbacks(repeat)
-            }
-            false
-        }
-    }
-
     private class DialFace(context: Context) : View(context) {
-        /** Le disque occupe cette fraction de la vue ; le reste est la couronne des graduations. */
-        private val DISC_RATIO = 0.335f
-        var hasBottomIcon = false
-
-        private val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
-        private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
-        private val pointerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private val galbePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-        private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-        private val pointer = Path()
-        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
-        private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
-        private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-        private val mediumTypeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        private val regularTypeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        private val bounds = RectF()
         private var value = "0"
         private var unit = ""
         private var legend = ""
         private var progress = 0f
         private var marker: Float? = null
         private var staticLayer: Bitmap? = null
-        private var layerSize = 0
-
-        /** Appelé quand le geste fait franchir une graduation : +1 ou −1. */
-        var onRotateStep: ((Int) -> Unit)? = null
-
         private var lastAngle = Float.NaN
         private var accumulated = 0f
-        private val stepDegrees = 270f / 90f
-
-        /** Position affichée de l'encoche : elle glisse vers sa cible, elle ne saute pas. */
         private var pointerPos = 0f
         private var pointerTarget = 0f
         private var animating = false
-        private val animTick = Runnable {
-            val delta = pointerTarget - pointerPos
-            if (delta < 0.0015f && delta > -0.0015f) {
-                pointerPos = pointerTarget
-                animating = false
-            } else {
-                // Amorti doux : 22 % d'écart absorbé par image, ~120 ms pour se stabiliser.
-                pointerPos += delta * 0.22f
-                postInvalidateOnAnimation()
+
+        private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
+        private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
+        private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+        private val ringBounds = RectF()
+        // Instances réutilisées : l'animation et le décompte n'allouent aucune police par image.
+        private val mediumTypeface = T.typeface(T.TypefaceRole.MEDIUM)
+        private val regularTypeface = T.typeface(T.TypefaceRole.REGULAR)
+
+        var onRotateStep: ((Int) -> Unit)? = null
+
+        private val animTick = object : Runnable {
+            override fun run() {
+                val delta = pointerTarget - pointerPos
+                if (delta > -0.001f && delta < 0.001f) {
+                    pointerPos = pointerTarget
+                    animating = false
+                    invalidate()
+                } else {
+                    pointerPos += delta * 0.28f
+                    invalidate()
+                    postOnAnimation(this)
+                }
             }
-            invalidate()
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -482,48 +448,49 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
                 MotionEvent.ACTION_DOWN -> {
                     lastAngle = angleOf(event)
                     accumulated = 0f
-                    performClick()
+                    isPressed = true
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val angle = angleOf(event)
                     if (!lastAngle.isNaN()) {
                         var delta = angle - lastAngle
-                        // Passage par ±180° : on ramène le saut dans l'intervalle utile.
                         if (delta > 180f) delta -= 360f
                         if (delta < -180f) delta += 360f
                         accumulated += delta
-                        while (accumulated >= stepDegrees) {
-                            accumulated -= stepDegrees
+                        while (accumulated >= STEP_DEGREES) {
+                            accumulated -= STEP_DEGREES
                             onRotateStep?.invoke(1)
                         }
-                        while (accumulated <= -stepDegrees) {
-                            accumulated += stepDegrees
+                        while (accumulated <= -STEP_DEGREES) {
+                            accumulated += STEP_DEGREES
                             onRotateStep?.invoke(-1)
                         }
                     }
                     lastAngle = angle
                     return true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP -> {
+                    isPressed = false
                     lastAngle = Float.NaN
-                    accumulated = 0f
+                    performClick()
+                    return true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isPressed = false
+                    lastAngle = Float.NaN
                     return true
                 }
             }
             return super.onTouchEvent(event)
         }
 
-        override fun performClick(): Boolean {
-            super.performClick()
-            return true
-        }
-
-        private fun angleOf(event: MotionEvent): Float {
-            val dx = event.x - width / 2f
-            val dy = event.y - height / 2f
-            return Math.toDegrees(Math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
-        }
+        private fun angleOf(event: MotionEvent): Float = Math.toDegrees(
+            Math.atan2(
+                (event.y - height / 2f).toDouble(),
+                (event.x - width / 2f).toDouble(),
+            ),
+        ).toFloat()
 
         fun update(value: String, unit: String, legend: String, progress: Float, marker: Float?) {
             if (this.value == value && this.unit == unit && this.legend == legend &&
@@ -536,7 +503,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             pointerTarget = this.marker ?: this.progress
             if (!animating && pointerPos != pointerTarget) {
                 animating = true
-                postInvalidateOnAnimation()
+                postOnAnimation(animTick)
             }
             invalidate()
         }
@@ -544,178 +511,117 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             staticLayer?.recycle()
             staticLayer = null
-            layerSize = w
         }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val size = minOf(width, height).toFloat()
             if (size <= 0f) return
-            // Amorçage de l'animation : une seule boucle tant qu'elle n'est pas stabilisée.
-            if (animating) removeCallbacks(animTick).also { post(animTick) }
             val cx = width / 2f
             val cy = height / 2f
-            // Le disque occupe 87 % de la vue : le reste est la place de la pénombre.
-            // Le disque laisse 15 % de la vue à la pénombre : assez pour qu'elle s'éteigne
-            // avant le bord de la vue, sinon elle est coupée net sur une ligne horizontale.
-            // Bouton rotatif : le disque est plus petit, les graduations vivent autour de lui.
-            val radius = size * DISC_RATIO
-            val arcRadius = radius - Ui.uf(3f)
+            val r = size * DISC_RATIO
 
-            // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
-            val shadowBitmap = ShadowLayer.contact((2 * radius).toInt(), Ui.u(10), 46)
-            canvas.drawBitmap(
-                shadowBitmap,
-                cx - shadowBitmap.width / 2f,
-                cy + Ui.uf(4f) - shadowBitmap.height / 2f,
-                null,
-            )
-            // Couche figée : disque et graduations. Redessinée uniquement si la taille change.
-            val layer = staticLayer ?: buildLayer(size, cx, cy, radius, arcRadius).also { staticLayer = it }
-            canvas.drawBitmap(layer, 0f, 0f, null)
+            // Ombre précalculée et douce : une seule image, rien à calculer par image.
+            val shadow = ShadowLayer.contact((2 * r).toInt(), Ui.u(8), 28)
+            canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(3f) - shadow.height / 2f, null)
+            canvas.drawBitmap(staticLayer ?: buildLayer(cx, cy, r).also { staticLayer = it }, 0f, 0f, null)
 
-            // Piste et progression à l'extérieur du disque blanc : le bord du cadran reste net.
-            val ringRadius = radius + Ui.uf(2f)
-            bounds.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
-            arcPaint.strokeWidth = Ui.uf(3f)
-            // Le cadran actif se signale par un anneau vert pâle, sans ajouter de trait d'état.
-            arcPaint.color = if (isFocused || isSelected) withAlpha(T.BOTANICAL, 0x6A) else T.ARC_TRACK
-            canvas.drawArc(bounds, 135f, 270f, false, arcPaint)
-            arcPaint.color = T.BOTANICAL
-            if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, arcPaint)
+            // Un seul anneau : piste et progression sur le chemin des graduations.
+            val ringRadius = r + Ui.uf(9f)
+            ringBounds.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
+            ringPaint.strokeWidth = Ui.uf(2f)
+            ringPaint.color = if (isFocused || isSelected) withAlpha(T.BOTANICAL, 0x6A) else T.ARC_TRACK
+            canvas.drawArc(ringBounds, START_ANGLE, SWEEP_ANGLE, false, ringPaint)
+            ringPaint.color = T.BRAND
+            if (progress > 0f) canvas.drawArc(ringBounds, START_ANGLE, SWEEP_ANGLE * progress, false, ringPaint)
 
-            // Indicateur intégré : une encoche taillée dans le bord du bouton, à la position
-            // courante, et une ligne d'accroche qui la relie aux graduations. Plus de pièce
-            // rapportée flottant dans la couronne.
-            val notchAngle = 135f + 270f * pointerPos
-            val rad = Math.toRadians(notchAngle.toDouble())
-            val cosA = Math.cos(rad).toFloat()
-            val sinA = Math.sin(rad).toFloat()
-            val notchHalf = Ui.uf(9f)
-            val notchDepth = Ui.uf(16f)
-            pointer.reset()
-            pointer.moveTo(cx + cosA * (radius - notchDepth), cy + sinA * (radius - notchDepth))
-            pointer.lineTo(
-                cx + (cosA * radius) - (-sinA * notchHalf),
-                cy + (sinA * radius) - (cosA * notchHalf),
-            )
-            pointer.lineTo(
-                cx + (cosA * radius) + (-sinA * notchHalf),
-                cy + (sinA * radius) + (cosA * notchHalf),
-            )
-            pointer.close()
-            pointerPaint.color = T.SURFACE3
-            canvas.drawPath(pointer, pointerPaint)
-            rimPaint.color = T.BRAND
-            rimPaint.strokeWidth = Ui.uf(2f)
-            canvas.drawPath(pointer, rimPaint)
-
-            // Ligne d'accroche : de l'encoche vers les graduations.
-            arcPaint.strokeWidth = Ui.uf(2.2f)
-            arcPaint.color = T.BRAND
+            // Le repère appartient au disque : un ergot court, arrondi et vert sur sa tranche.
+            // Ce n'est ni un triangle extérieur, ni une encoche qui perce le corps du bouton.
+            val angle = Math.toRadians((START_ANGLE + SWEEP_ANGLE * pointerPos).toDouble())
+            val cos = Math.cos(angle).toFloat()
+            val sin = Math.sin(angle).toFloat()
+            ringPaint.strokeWidth = Ui.uf(5f)
+            ringPaint.color = T.BRAND
             canvas.drawLine(
-                cx + cosA * (radius + Ui.uf(15f)), cy + sinA * (radius + Ui.uf(15f)),
-                cx + cosA * (radius + Ui.uf(23f)), cy + sinA * (radius + Ui.uf(23f)),
-                arcPaint,
+                cx + cos * (r - Ui.uf(7f)), cy + sin * (r - Ui.uf(7f)),
+                cx + cos * (r + Ui.uf(3f)), cy + sin * (r + Ui.uf(3f)),
+                ringPaint,
+            )
+            // Petit centre ivoire dans l'ergot, fin comme une gravure plutôt qu'un bouton vert.
+            ringPaint.strokeWidth = Ui.uf(1.2f)
+            ringPaint.color = T.BUTTON_FACE
+            canvas.drawLine(
+                cx + cos * (r - Ui.uf(4f)), cy + sin * (r - Ui.uf(4f)),
+                cx + cos * (r - Ui.uf(1f)), cy + sin * (r - Ui.uf(1f)),
+                ringPaint,
             )
 
-            drawValue(canvas, cx, cy, size)
-            drawLegend(canvas, cx, cy, size, radius)
+            drawReadout(canvas, cx, cy, r)
         }
 
-        private fun buildLayer(size: Float, cx: Float, cy: Float, radius: Float, arcRadius: Float): Bitmap {
+        /** Matière et graduations ne changent jamais : un seul bitmap recyclé lors d'un resize. */
+        private fun buildLayer(cx: Float, cy: Float, r: Float): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-
-            // --- Matière : galbe radial doux, du centre ivoire vers le bord légèrement ombré.
-            galbePaint.shader = RadialGradient(
-                cx, cy, radius,
-                intArrayOf(T.BUTTON_FACE, T.BUTTON_FACE, T.SURFACE3),
-                floatArrayOf(0f, 0.92f, 1f),
+            // Un galbe vertical presque imperceptible, sans gris métallisé ni double bord.
+            bodyPaint.shader = LinearGradient(
+                cx, cy - r, cx, cy + r,
+                intArrayOf(T.BUTTON_FACE, T.BUTTON_FACE, T.SURFACE2),
+                floatArrayOf(0f, 0.88f, 1f),
                 Shader.TileMode.CLAMP,
             )
-            canvas.drawCircle(cx, cy, radius, galbePaint)
-            galbePaint.shader = null
+            canvas.drawCircle(cx, cy, r, bodyPaint)
+            bodyPaint.shader = null
 
-            // --- Filet intérieur : la « coupe » franche du métal, à 3 unités du bord.
-            rimPaint.color = withAlpha(T.STROKE, 0xD0)
-            rimPaint.strokeWidth = Ui.uf(1f)
-            canvas.drawCircle(cx, cy, radius - Ui.uf(3f), rimPaint)
+            // L'arête extérieure unique remplace les filets concentriques et encoches précédentes.
+            edgePaint.color = withAlpha(T.STROKE, 0xFF)
+            edgePaint.strokeWidth = Ui.uf(1f)
+            canvas.drawCircle(cx, cy, r - Ui.uf(0.5f), edgePaint)
 
-            // --- Liseré lumineux : l'arête qui accroche la lumière, uniquement sur le haut.
-            lightPaint.color = withAlpha(0xFFFFFFFF.toInt(), 0x48)
-            lightPaint.strokeWidth = Ui.uf(1.2f)
-            val lightBox = RectF(cx - radius + Ui.uf(1.6f), cy - radius + Ui.uf(1.6f),
-                cx + radius - Ui.uf(1.6f), cy + radius - Ui.uf(1.6f))
-            canvas.drawArc(lightBox, 188f, 164f, false, lightPaint)
-
-            // --- Graduations feutrées : courtes et discrètes, jamais concurrentes de la valeur.
-            tickPaint.strokeWidth = Ui.uf(1f)
-            tickPaint.color = withAlpha(T.TICK, 0xB4)
-            for (i in 0..44) {
-                val angle = Math.toRadians((135 + i * 6).toDouble())
-                val inner = radius + Ui.uf(5f)
-                val outer = radius + Ui.uf(14f)
+            // Graduations régulières, allongées et légères, autour du bouton et non dans sa face.
+            tickPaint.strokeWidth = Ui.uf(1.1f)
+            tickPaint.color = withAlpha(T.STROKE_STRONG, 0x78)
+            for (i in 0..54) {
+                val a = Math.toRadians((START_ANGLE + SWEEP_ANGLE * i / 54f).toDouble())
+                val inner = r + Ui.uf(5f)
+                val outer = r + Ui.uf(13f)
                 canvas.drawLine(
-                    cx + (inner * Math.cos(angle)).toFloat(),
-                    cy + (inner * Math.sin(angle)).toFloat(),
-                    cx + (outer * Math.cos(angle)).toFloat(),
-                    cy + (outer * Math.sin(angle)).toFloat(),
+                    cx + inner * Math.cos(a).toFloat(), cy + inner * Math.sin(a).toFloat(),
+                    cx + outer * Math.cos(a).toFloat(), cy + outer * Math.sin(a).toFloat(),
                     tickPaint,
                 )
             }
             return bitmap
         }
 
-        private fun drawValue(canvas: Canvas, cx: Float, cy: Float, size: Float) {
+        /** Hiérarchie fixe : icône au sommet, valeur au centre, légende dessous. */
+        private fun drawReadout(canvas: Canvas, cx: Float, cy: Float, r: Float) {
             valuePaint.color = T.TEXT
             valuePaint.typeface = mediumTypeface
-            val discRadius = size * DISC_RATIO
-            // Le plus grand possible : la valeur occupe le disque, bornée pour rester lisible.
-            val baseValue = discRadius * 0.62f
-            valuePaint.textSize = Ui.uf(baseValue)
-            if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(baseValue * 0.7f)
-            val available = discRadius * 1.62f
-            while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(baseValue * 0.6f)) {
-                valuePaint.textSize -= Ui.uf(2f)
+            var valueSize = r * 0.48f
+            valuePaint.textSize = Ui.uf(valueSize)
+            val available = r * 1.48f
+            while (valuePaint.measureText(value) > available && valueSize > r * 0.30f) {
+                valueSize -= 1f
+                valuePaint.textSize = Ui.uf(valueSize)
             }
             unitPaint.color = T.TEXT2
             unitPaint.typeface = regularTypeface
-            unitPaint.textSize = Ui.uf(discRadius * 0.34f)
-            val valueWidth = valuePaint.measureText(value)
+            unitPaint.textSize = Ui.uf(r * 0.19f)
             val unitWidth = unitPaint.measureText(unit)
-            val gap = if (unit.isEmpty()) 0f else Ui.uf(5f)
-            val start = cx - (valueWidth + gap + unitWidth) / 2f
-            val baseline = cy + valuePaint.textSize * 0.36f
+            val valueWidth = valuePaint.measureText(value)
+            val gap = if (unit.isEmpty()) 0f else Ui.uf(4f)
+            val baseline = cy + r * 0.12f
+            var start = cx - (valueWidth + gap + unitWidth) / 2f
             canvas.drawText(value, start, baseline, valuePaint)
             if (unit.isNotEmpty()) canvas.drawText(unit, start + valueWidth + gap, baseline, unitPaint)
-        }
 
-        private fun drawLegend(canvas: Canvas, cx: Float, cy: Float, size: Float, discRadius: Float) {
             if (legend.isEmpty()) return
             legendPaint.color = T.TEXT2
-            legendPaint.typeface = mediumTypeface
-            legendPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_LEGEND, discRadius * 0.17f))
-            val maxWidth = discRadius * 1.7f
-            val lines = if (hasBottomIcon) listOf(fit(legend, maxWidth, legendPaint)) else wrapLegend(legend, maxWidth, legendPaint)
-            var y = cy + discRadius * (if (hasBottomIcon) 0.42f else 0.46f)
-            for (lineText in lines) {
-                canvas.drawText(lineText, cx, y, legendPaint)
-                y += legendPaint.textSize * 1.15f
-            }
-        }
-
-        private fun wrapLegend(text: String, maxWidth: Float, paint: Paint): List<String> {
-            if (paint.measureText(text) <= maxWidth) return listOf(text)
-            val separator = " · "
-            val cut = text.indexOf(separator)
-            if (cut > 0) {
-                return listOf(
-                    fit(text.substring(0, cut), maxWidth, paint),
-                    fit(text.substring(cut + separator.length), maxWidth, paint),
-                ).filter { it.isNotEmpty() }
-            }
-            return listOf(fit(text, maxWidth, paint))
+            legendPaint.typeface = regularTypeface
+            legendPaint.textSize = Ui.uf(r * 0.145f)
+            val line = fit(legend, r * 1.45f, legendPaint)
+            canvas.drawText(line, cx, cy + r * 0.47f, legendPaint)
         }
 
         private fun fit(text: String, maxWidth: Float, paint: Paint): String {
@@ -726,13 +632,21 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             }
             return shortened + "…"
         }
+
+        private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
+
+        private companion object {
+            const val START_ANGLE = 135f
+            const val SWEEP_ANGLE = 270f
+            const val STEP_DEGREES = 3f
+        }
     }
 
     companion object {
+        /** Diamètre utile : 80 % de la vue, la couronne ne rogne plus le bouton. */
+        const val DISC_RATIO = 0.40f
         /** Taille de repli du cadran, en unités de la grille 1024×600. */
         const val SIZE = 258
-
-        private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
     }
 }
 
