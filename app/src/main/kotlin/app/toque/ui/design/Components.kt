@@ -730,20 +730,20 @@ class Dial(
 
         private companion object {
             // Relief du bouton, en unités de la grille 1024×600.
-            const val BAND_WIDTH = 11.0f
+            const val BAND_WIDTH = 7.0f
             const val GAP_WIDTH = 2.6f
             const val TICK_START = 5.0f
             const val TICK_END = 22.0f
 
-            const val BAND_TOP = 0xFFF6F0E6.toInt()
-            const val BAND_MID = 0xFFE2D5C1.toInt()
-            const val BAND_BOTTOM = 0xFFB09B7C.toInt()
+            const val BAND_TOP = 0xFFFAF5EC.toInt()
+            const val BAND_MID = 0xFFEDE3D2.toInt()
+            const val BAND_BOTTOM = 0xFFC9B79B.toInt()
             const val EDGE_DARK = 0xFF6E5B40.toInt()
-            const val GROOVE = 0xFF9C8868.toInt()
-            const val GROOVE_DEEP = 0xFF7A6749.toInt()
+            const val GROOVE = 0xFFB5A180.toInt()
+            const val GROOVE_DEEP = 0xFF96825F.toInt()
             const val FACE_TOP = 0xFFFFFDFA.toInt()
             const val FACE_MID = 0xFFF4ECDD.toInt()
-            const val FACE_BOTTOM = 0xFFD2C2A6.toInt()
+            const val FACE_BOTTOM = 0xFFDACBAE.toInt()
             const val SHADE = 0xFF5B4A33.toInt()
             const val GLOW = 0xFFFFFFFF.toInt()
             const val RING_INNER_COLOR = 0xFFB3A183.toInt()
