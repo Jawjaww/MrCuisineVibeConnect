@@ -614,26 +614,31 @@ class Dial(
             edgePaint.strokeWidth = Ui.uf(0.9f)
             canvas.drawCircle(cx, cy, grooveOuter - Ui.uf(GAP_WIDTH), edgePaint)
 
-            // --- 3. Le bouton lui-même. La lumière vient du HAUT : la face est claire en haut
-            //     et s'assombrit vers le bas. C'est ce qui donne l'impression qu'elle est bombée.
-            //     Un éclat secondaire très doux au centre-haut simule la courbure de la matière.
+            // --- 3. La face : une calotte légèrement enfoncée, éclairée d'en haut.
+            //     Le dégradé est LINÉAIRE et continu du bord haut au bord bas, sans pic au
+            //     milieu : c'est ce qui distingue une surface courbe d'un aplat dégradé.
             val faceR = grooveOuter - Ui.uf(GAP_WIDTH)
             facePaint.shader = LinearGradient(
                 cx, cy - faceR, cx, cy + faceR,
-                intArrayOf(FACE_TOP, FACE_MID, FACE_BOTTOM),
-                floatArrayOf(0f, 0.42f, 1f),
-                Shader.TileMode.CLAMP,
-            )
-            canvas.drawCircle(cx, cy, faceR, facePaint)
-            // Éclat de courbure : un halo clair décentré vers le haut, en dernier.
-            facePaint.shader = RadialGradient(
-                cx, cy - faceR * 0.32f, faceR * 0.86f,
-                intArrayOf(withAlpha(0xFFFFFFFF.toInt(), 0x9E), 0x00000000),
-                floatArrayOf(0f, 1f),
+                intArrayOf(FACE_EDGE_TOP, FACE_TOP, FACE_BOTTOM, FACE_EDGE_BOTTOM),
+                floatArrayOf(0f, 0.30f, 0.72f, 1f),
                 Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(cx, cy, faceR, facePaint)
             facePaint.shader = null
+
+            // --- 3b. Rebord du creux : l'ombre du bord haut et la lumière du bord bas,
+            //     portées par un anneau dégradé. C'est ce qui « enfonce » la face.
+            edgePaint.strokeWidth = Ui.uf(3f)
+            edgePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(withAlpha(CUP_DARK, 0x70), withAlpha(CUP_DARK, 0x00),
+                    withAlpha(CUP_LIGHT, 0x00), withAlpha(CUP_LIGHT, 0x80)),
+                floatArrayOf(0f, 0.40f, 0.62f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR - Ui.uf(1.5f), edgePaint)
+            edgePaint.shader = null
             facePaint.shader = null
 
             // --- 4. Creux 3D : le disque est légèrement enfoncé. L'ombre tombe du côté
@@ -741,9 +746,12 @@ class Dial(
             const val EDGE_DARK = 0xFF6E5B40.toInt()
             const val GROOVE = 0xFFB5A180.toInt()
             const val GROOVE_DEEP = 0xFF96825F.toInt()
-            const val FACE_TOP = 0xFFFFFDFA.toInt()
-            const val FACE_MID = 0xFFF4ECDD.toInt()
-            const val FACE_BOTTOM = 0xFFDACBAE.toInt()
+            const val FACE_EDGE_TOP = 0xFFF2E8D6.toInt()
+            const val FACE_TOP = 0xFFFFFFFF.toInt()
+            const val FACE_BOTTOM = 0xFFE8DDC8.toInt()
+            const val FACE_EDGE_BOTTOM = 0xFFD6C6A8.toInt()
+            const val CUP_DARK = 0xFF4A3722.toInt()
+            const val CUP_LIGHT = 0xFFFFFFFF.toInt()
             const val SHADE = 0xFF5B4A33.toInt()
             const val GLOW = 0xFFFFFFFF.toInt()
             const val RING_INNER_COLOR = 0xFFB3A183.toInt()
