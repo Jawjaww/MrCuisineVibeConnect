@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -357,10 +358,6 @@ class ToggleRoundButton(
 /** Cadran : disque ombré avec graduations intérieures, arc de progression et valeur centrale. */
 class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomIcon: Icon.Kind? = null, val size: Int = SIZE) : LinearLayout(context) {
     private val face = DialFace(context)
-    // Les − / + suivent la taille du cadran, sinon ils paraissent minuscules sur un grand disque.
-    private val stepper = (size * 0.21f).toInt().coerceIn(48, 88)
-    private val minus = RoundButton(context, Icon.Kind.MINUS, size = stepper, castShadow = true, shadowAlpha = 30) { onSelect(); onMinus() }
-    private val plus = RoundButton(context, Icon.Kind.PLUS, size = stepper, castShadow = true, shadowAlpha = 30) { onSelect(); onPlus() }
 
     var onSelect: () -> Unit = {}
     var onMinus: () -> Unit = {}
@@ -386,20 +383,12 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             },
         )
         addView(box, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
-        val actions = Ui.horizontal(context, Gravity.CENTER)
-        actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
-        actions.addView(plus, Ui.lp(Ui.u(plus.outerSize), Ui.u(plus.outerSize)))
-        // Les boutons sont posés sur le bas du disque, comme sur la maquette.
-        // Sur un petit cadran, un chevauchement fort mangerait la légende.
-        addView(actions, Ui.lp(Ui.MATCH, Ui.u(minus.outerSize), t = if (size >= 240) -44 else -30))
+        // Le réglage se fait en tournant le bouton : plus de ligne de − / +.
+        face.onRotateStep = { direction -> if (direction > 0) onPlus() else onMinus() }
         face.isFocusable = true
         face.isClickable = true
         face.setOnClickListener { onSelect() }
         face.setOnFocusChangeListener { _, focused -> if (focused) onSelect(); face.invalidate() }
-        minus.focusView().setOnFocusChangeListener { _, focused -> if (focused) onSelect() }
-        plus.focusView().setOnFocusChangeListener { _, focused -> if (focused) onSelect() }
-        repeatOnHold(minus.focusView()) { if (repeatEnabled) onMinus() }
-        repeatOnHold(plus.focusView()) { if (repeatEnabled) onPlus() }
     }
 
     fun set(value: String, unit: String = "", legend: String = "", progress: Float = 0f, marker: Float? = null) {
@@ -443,6 +432,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        private val pointerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val pointer = Path()
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val legendPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
@@ -456,6 +447,61 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private var marker: Float? = null
         private var staticLayer: Bitmap? = null
         private var layerSize = 0
+
+        /** Appelé quand le geste fait franchir une graduation : +1 ou −1. */
+        var onRotateStep: ((Int) -> Unit)? = null
+
+        private var lastAngle = Float.NaN
+        private var accumulated = 0f
+        private val stepDegrees = 270f / 90f
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastAngle = angleOf(event)
+                    accumulated = 0f
+                    performClick()
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val angle = angleOf(event)
+                    if (!lastAngle.isNaN()) {
+                        var delta = angle - lastAngle
+                        // Passage par ±180° : on ramène le saut dans l'intervalle utile.
+                        if (delta > 180f) delta -= 360f
+                        if (delta < -180f) delta += 360f
+                        accumulated += delta
+                        while (accumulated >= stepDegrees) {
+                            accumulated -= stepDegrees
+                            onRotateStep?.invoke(1)
+                        }
+                        while (accumulated <= -stepDegrees) {
+                            accumulated += stepDegrees
+                            onRotateStep?.invoke(-1)
+                        }
+                    }
+                    lastAngle = angle
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    lastAngle = Float.NaN
+                    accumulated = 0f
+                    return true
+                }
+            }
+            return super.onTouchEvent(event)
+        }
+
+        override fun performClick(): Boolean {
+            super.performClick()
+            return true
+        }
+
+        private fun angleOf(event: MotionEvent): Float {
+            val dx = event.x - width / 2f
+            val dy = event.y - height / 2f
+            return Math.toDegrees(Math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+        }
 
         fun update(value: String, unit: String, legend: String, progress: Float, marker: Float?) {
             if (this.value == value && this.unit == unit && this.legend == legend &&
@@ -483,7 +529,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             // Le disque occupe 87 % de la vue : le reste est la place de la pénombre.
             // Le disque laisse 15 % de la vue à la pénombre : assez pour qu'elle s'éteigne
             // avant le bord de la vue, sinon elle est coupée net sur une ligne horizontale.
-            val radius = size * 0.425f
+            // Bouton rotatif : le disque est plus petit, les graduations vivent autour de lui.
+            val radius = size * 0.335f
             val arcRadius = radius - Ui.uf(3f)
 
             // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
@@ -499,7 +546,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             canvas.drawBitmap(layer, 0f, 0f, null)
 
             // Piste et progression à l'extérieur du disque blanc : le bord du cadran reste net.
-            val ringRadius = radius + Ui.uf(1f)
+            val ringRadius = radius + Ui.uf(2f)
             bounds.set(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
             arcPaint.strokeWidth = Ui.uf(3f)
             // Le cadran actif se signale par un anneau vert pâle, sans ajouter de trait d'état.
@@ -508,20 +555,27 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             arcPaint.color = T.BOTANICAL
             if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, arcPaint)
 
-            marker?.let { fraction ->
-                val angle = Math.toRadians((135 + 270 * fraction).toDouble())
-                arcPaint.strokeWidth = Ui.uf(2f)
-                arcPaint.color = T.TEXT
-                val inner = radius - Ui.uf(20f)
-                val outer = radius - Ui.uf(4f)
-                canvas.drawLine(
-                    cx + (inner * Math.cos(angle)).toFloat(),
-                    cy + (inner * Math.sin(angle)).toFloat(),
-                    cx + (outer * Math.cos(angle)).toFloat(),
-                    cy + (outer * Math.sin(angle)).toFloat(),
-                    arcPaint,
-                )
-            }
+            // Indicateur de position : une flèche dans la couronne. C'est elle qui donne
+            // l'impression que le bouton tourne, sans faire pivoter la valeur.
+            val pointerAt = marker ?: progress
+            val pointerAngle = (135f + 270f * pointerAt).toDouble()
+            val rad = Math.toRadians(pointerAngle)
+            val tipR = radius + Ui.uf(4f)
+            val baseR = radius + Ui.uf(19f)
+            val halfW = Ui.uf(7f)
+            val tipX = cx + (tipR * Math.cos(rad)).toFloat()
+            val tipY = cy + (tipR * Math.sin(rad)).toFloat()
+            val perpX = -Math.sin(rad).toFloat() * halfW
+            val perpY = Math.cos(rad).toFloat() * halfW
+            val baseX = (cx + (baseR * Math.cos(rad)).toFloat())
+            val baseY = (cy + (baseR * Math.sin(rad)).toFloat())
+            pointer.reset()
+            pointer.moveTo(tipX, tipY)
+            pointer.lineTo(baseX + perpX, baseY + perpY)
+            pointer.lineTo(baseX - perpX, baseY - perpY)
+            pointer.close()
+            pointerPaint.color = T.BRAND
+            canvas.drawPath(pointer, pointerPaint)
 
             drawValue(canvas, cx, cy, size)
             drawLegend(canvas, cx, cy, size)
@@ -535,13 +589,13 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             discPaint.style = Paint.Style.FILL
             canvas.drawCircle(cx, cy, radius, discPaint)
 
-            // Graduations strictement identiques : aucune ne doit se lire comme une aiguille.
-            tickPaint.strokeWidth = Ui.uf(1.2f)
+            // Graduations strictement identiques, dans une couronne EXTÉRIEURE au disque.
+            tickPaint.strokeWidth = Ui.uf(1.4f)
             tickPaint.color = T.TICK
             for (i in 0..44) {
                 val angle = Math.toRadians((135 + i * 6).toDouble())
-                val inner = radius - Ui.uf(15f)
-                val outer = radius - Ui.uf(8f)
+                val inner = radius + Ui.uf(6f)
+                val outer = radius + Ui.uf(15f)
                 canvas.drawLine(
                     cx + (inner * Math.cos(angle)).toFloat(),
                     cy + (inner * Math.sin(angle)).toFloat(),

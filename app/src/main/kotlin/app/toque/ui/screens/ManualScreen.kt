@@ -65,20 +65,20 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // et 56 pour Démarrer. D'où 320 pour les cadrans, le maximum vérifié.
         val button = 96
         val gap = 6
-        dialSize = 290
+        dialSize = 300
         val groupWidth = 3 * dialSize + 2 * gap
-        val controlsTop = dialSize + 23 + 4
+        val controlsTop = dialSize + 4
 
         val dash = FrameLayout(c)
         dash.setPadding(Ui.u(16), Ui.u(8), Ui.u(16), Ui.u(8))
 
         // --- Coins hauts : poids à gauche, température à droite.
-        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 140)
-        dash.addView(weightMini, FrameLayout.LayoutParams(Ui.u(140), Ui.u(140), Gravity.TOP or Gravity.START))
-        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 140)
+        weightMini = MiniCircle(c, Icon.Kind.SCALE, showBar = true, size = 112)
+        dash.addView(weightMini, FrameLayout.LayoutParams(Ui.u(112), Ui.u(112), Gravity.TOP or Gravity.START))
+        tempMini = MiniCircle(c, Icon.Kind.THERMO, size = 112)
         dash.addView(
             tempMini,
-            FrameLayout.LayoutParams(Ui.u(140), Ui.u(140), Gravity.TOP or Gravity.END).apply {
+            FrameLayout.LayoutParams(Ui.u(112), Ui.u(112), Gravity.TOP or Gravity.END).apply {
                 rightMargin = Ui.u(16)
             },
         )
@@ -102,7 +102,9 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         }
         dash.addView(
             group,
-            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
+            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = Ui.u(34)
+            },
         )
 
         directionToggle = ToggleRoundButton(c, flat = true) { setReverse(!reverse) }
@@ -139,7 +141,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         dash.addView(
             play,
             FrameLayout.LayoutParams(Ui.MATCH, Ui.u(96), Gravity.CENTER_HORIZONTAL).apply {
-                topMargin = Ui.u(dialSize + 23 + 10)
+                topMargin = Ui.u(34 + dialSize + 12)
             },
         )
 
