@@ -581,32 +581,59 @@ class Dial(
             val dropShadow = ShadowLayer.drop((2 * r).toInt(), Ui.u(18), 78)
             canvas.drawBitmap(dropShadow, cx - dropShadow.width / 2f, cy + Ui.uf(7f) - dropShadow.height / 2f, null)
 
-            // --- 1. Bague extérieure : matière la plus sombre, elle fait le tour du bouton.
+            // --- 1. Le bouton est fait de DEUX cylindres concentriques séparés par une
+            //     rainure en V. Le rayon extérieur est celui de la vue ; chaque anneau a
+            //     sa propre lumière, ce qui fait lire le double contour même de loin.
+
+            // 1a. Anneau extérieur : dégradé diagonal, lumière en haut-gauche, ombre en bas-droite.
             bandPaint.style = Paint.Style.FILL
             bandPaint.shader = LinearGradient(
-                cx, cy - r, cx, cy + r,
-                intArrayOf(BAND_TOP, BAND_BOTTOM),
-                floatArrayOf(0f, 1f),
+                cx - r * 0.7f, cy - r, cx + r * 0.7f, cy + r,
+                intArrayOf(BAND_TOP, BAND_MID, BAND_BOTTOM),
+                floatArrayOf(0f, 0.45f, 1f),
                 Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(cx, cy, r, bandPaint)
             bandPaint.shader = null
 
-            // --- 2. Espace de séparation : un anneau franchement plus clair, d'un peu
-            //     plus d'une unité, qui creuse la rainure entre les deux contours.
-            val gapOuter = r - Ui.uf(BAND_WIDTH)
-            bandPaint.color = GAP_COLOR
-            canvas.drawCircle(cx, cy, gapOuter, bandPaint)
+            // 1b. Arête externe fine et sombre : le bord du métal.
+            edgePaint.color = withAlpha(EDGE_DARK, 0xC0)
+            edgePaint.strokeWidth = Ui.uf(1f)
+            canvas.drawCircle(cx, cy, r - Ui.uf(0.5f), edgePaint)
 
-            // --- 3. Le bouton lui-même : dégradé vertical, clair en haut, ivoire soutenu en bas.
-            val faceR = gapOuter - Ui.uf(GAP_WIDTH)
+            // 2. Rainure : un anneau NETTEMENT plus sombre que les deux anneaux, puisque
+            //    c'est le creux entre eux. C'est le contraste, pas la couleur, qui la fait lire.
+            val grooveOuter = r - Ui.uf(BAND_WIDTH)
+            bandPaint.color = GROOVE
+            canvas.drawCircle(cx, cy, grooveOuter, bandPaint)
+            // Fond de la rainure encore plus sombre sur 40 % de sa largeur : donne le V.
+            bandPaint.color = GROOVE_DEEP
+            canvas.drawCircle(cx, cy, grooveOuter - Ui.uf(GAP_WIDTH * 0.3f), bandPaint)
+            // Lèvre intérieure de la rainure : lumière rasante sur le cylindre intérieur.
+            edgePaint.color = withAlpha(GLOW, 0xA0)
+            edgePaint.strokeWidth = Ui.uf(0.9f)
+            canvas.drawCircle(cx, cy, grooveOuter - Ui.uf(GAP_WIDTH), edgePaint)
+
+            // --- 3. Le bouton lui-même. La lumière vient du HAUT : la face est claire en haut
+            //     et s'assombrit vers le bas. C'est ce qui donne l'impression qu'elle est bombée.
+            //     Un éclat secondaire très doux au centre-haut simule la courbure de la matière.
+            val faceR = grooveOuter - Ui.uf(GAP_WIDTH)
             facePaint.shader = LinearGradient(
                 cx, cy - faceR, cx, cy + faceR,
                 intArrayOf(FACE_TOP, FACE_MID, FACE_BOTTOM),
-                floatArrayOf(0f, 0.48f, 1f),
+                floatArrayOf(0f, 0.42f, 1f),
                 Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(cx, cy, faceR, facePaint)
+            // Éclat de courbure : un halo clair décentré vers le haut, en dernier.
+            facePaint.shader = RadialGradient(
+                cx, cy - faceR * 0.32f, faceR * 0.86f,
+                intArrayOf(withAlpha(0xFFFFFFFF.toInt(), 0x9E), 0x00000000),
+                floatArrayOf(0f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR, facePaint)
+            facePaint.shader = null
             facePaint.shader = null
 
             // --- 4. Creux 3D : le disque est légèrement enfoncé. L'ombre tombe du côté
@@ -704,16 +731,19 @@ class Dial(
         private companion object {
             // Relief du bouton, en unités de la grille 1024×600.
             const val BAND_WIDTH = 11.0f
-            const val GAP_WIDTH = 2.2f
+            const val GAP_WIDTH = 2.6f
             const val TICK_START = 5.0f
             const val TICK_END = 22.0f
 
-            const val BAND_TOP = 0xFFEADFCE.toInt()
-            const val BAND_BOTTOM = 0xFF7D6849.toInt()
-            const val GAP_COLOR = 0xFFC9BBA4.toInt()
-            const val FACE_TOP = 0xFFFFFFFF.toInt()
-            const val FACE_MID = 0xFFFBF5EA.toInt()
-            const val FACE_BOTTOM = 0xFFD8C9AE.toInt()
+            const val BAND_TOP = 0xFFF6F0E6.toInt()
+            const val BAND_MID = 0xFFE2D5C1.toInt()
+            const val BAND_BOTTOM = 0xFFB09B7C.toInt()
+            const val EDGE_DARK = 0xFF6E5B40.toInt()
+            const val GROOVE = 0xFF9C8868.toInt()
+            const val GROOVE_DEEP = 0xFF7A6749.toInt()
+            const val FACE_TOP = 0xFFFFFDFA.toInt()
+            const val FACE_MID = 0xFFF4ECDD.toInt()
+            const val FACE_BOTTOM = 0xFFD2C2A6.toInt()
             const val SHADE = 0xFF5B4A33.toInt()
             const val GLOW = 0xFFFFFFFF.toInt()
             const val RING_INNER_COLOR = 0xFFB3A183.toInt()
