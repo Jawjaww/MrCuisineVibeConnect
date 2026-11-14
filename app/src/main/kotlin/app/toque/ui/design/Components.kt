@@ -415,7 +415,6 @@ class Dial(
         private var progress = 0f
         private var marker: Float? = null
         private var staticLayer: Bitmap? = null
-        private var shadowBitmap: Bitmap? = null
         private var lastAngle = Float.NaN
         private var accumulated = 0f
         private var pointerPos = 0f
@@ -522,8 +521,6 @@ class Dial(
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             staticLayer?.recycle()
             staticLayer = null
-            // L'ombre est partagée par le cache global : on lâche la référence sans la recycler.
-            shadowBitmap = null
         }
 
         override fun onDraw(canvas: Canvas) {
@@ -534,11 +531,7 @@ class Dial(
             val cy = height / 2f
             val r = size * DISC_RATIO
 
-            // Ombre résolue une seule fois par taille : la clé du cache ne change jamais
-            // entre deux images, donc aucun calcul de pénombre pendant l'animation.
-            val shadow = shadowBitmap ?: ShadowLayer.contact((2 * r).toInt(), Ui.u(8), 28)
-                .also { shadowBitmap = it }
-            canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(3f) - shadow.height / 2f, null)
+            // Ombre et matière sont cuites ensemble dans la couche : rien à calculer par image.
             canvas.drawBitmap(staticLayer ?: buildLayer(cx, cy, r).also { staticLayer = it }, 0f, 0f, null)
 
             // Un seul anneau : piste et progression sur le chemin des graduations.
@@ -582,6 +575,11 @@ class Dial(
         private fun buildLayer(cx: Float, cy: Float, r: Float): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
+
+            // --- 0. Ombre portée du bouton sur le fond : c'est elle qui le décolle de la page.
+            //     Dessinée ici, et non dans onDraw, pour qu'elle soit cuite avec le reste.
+            val dropShadow = ShadowLayer.drop((2 * r).toInt(), Ui.u(18), 78)
+            canvas.drawBitmap(dropShadow, cx - dropShadow.width / 2f, cy + Ui.uf(7f) - dropShadow.height / 2f, null)
 
             // --- 1. Bague extérieure : matière la plus sombre, elle fait le tour du bouton.
             bandPaint.style = Paint.Style.FILL
@@ -705,14 +703,14 @@ class Dial(
 
         private companion object {
             // Relief du bouton, en unités de la grille 1024×600.
-            const val BAND_WIDTH = 5.0f
-            const val GAP_WIDTH = 1.8f
-            const val TICK_START = 4.0f
-            const val TICK_END = 15.0f
+            const val BAND_WIDTH = 11.0f
+            const val GAP_WIDTH = 2.2f
+            const val TICK_START = 5.0f
+            const val TICK_END = 22.0f
 
-            const val BAND_TOP = 0xFFF0E7DA.toInt()
-            const val BAND_BOTTOM = 0xFF8F7A5E.toInt()
-            const val GAP_COLOR = 0xFFFFFEFB.toInt()
+            const val BAND_TOP = 0xFFEADFCE.toInt()
+            const val BAND_BOTTOM = 0xFF7D6849.toInt()
+            const val GAP_COLOR = 0xFFC9BBA4.toInt()
             const val FACE_TOP = 0xFFFFFFFF.toInt()
             const val FACE_MID = 0xFFFBF5EA.toInt()
             const val FACE_BOTTOM = 0xFFD8C9AE.toInt()
