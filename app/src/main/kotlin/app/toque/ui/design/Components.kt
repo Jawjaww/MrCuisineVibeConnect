@@ -307,7 +307,7 @@ class ToggleRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (flat) 34 else 30), Ui.u(if (flat) 34 else 30), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 44 else 30), Ui.u(if (flat) 44 else 30), Gravity.CENTER))
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -426,6 +426,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
     }
 
     private class DialFace(context: Context) : View(context) {
+        /** Le disque occupe cette fraction de la vue ; le reste est la couronne des graduations. */
+        private val DISC_RATIO = 0.335f
         var hasBottomIcon = false
 
         private val discPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -530,7 +532,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             // Le disque laisse 15 % de la vue à la pénombre : assez pour qu'elle s'éteigne
             // avant le bord de la vue, sinon elle est coupée net sur une ligne horizontale.
             // Bouton rotatif : le disque est plus petit, les graduations vivent autour de lui.
-            val radius = size * 0.335f
+            val radius = size * DISC_RATIO
             val arcRadius = radius - Ui.uf(3f)
 
             // Pénombre dessinée hors du bitmap de couche, sinon elle est rognée au bord du view.
@@ -578,7 +580,7 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             canvas.drawPath(pointer, pointerPaint)
 
             drawValue(canvas, cx, cy, size)
-            drawLegend(canvas, cx, cy, size)
+            drawLegend(canvas, cx, cy, size, radius)
         }
 
         private fun buildLayer(size: Float, cx: Float, cy: Float, radius: Float, arcRadius: Float): Bitmap {
@@ -610,37 +612,38 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private fun drawValue(canvas: Canvas, cx: Float, cy: Float, size: Float) {
             valuePaint.color = T.TEXT
             valuePaint.typeface = mediumTypeface
-            val discRadius = size * 0.425f
-            val baseValue = maxOf(T.Type.DIAL_VALUE, discRadius * 0.46f)
+            val discRadius = size * DISC_RATIO
+            // Le plus grand possible : la valeur occupe le disque, bornée pour rester lisible.
+            val baseValue = discRadius * 0.62f
             valuePaint.textSize = Ui.uf(baseValue)
             if (value.isEmpty() || value == "—") valuePaint.textSize = Ui.uf(baseValue * 0.7f)
-            val available = size * 0.62f
+            val available = discRadius * 1.62f
             while (valuePaint.measureText(value) > available && valuePaint.textSize > Ui.uf(baseValue * 0.6f)) {
                 valuePaint.textSize -= Ui.uf(2f)
             }
             unitPaint.color = T.TEXT2
             unitPaint.typeface = regularTypeface
-            unitPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_UNIT, discRadius * 0.16f))
+            unitPaint.textSize = Ui.uf(discRadius * 0.34f)
             val valueWidth = valuePaint.measureText(value)
             val unitWidth = unitPaint.measureText(unit)
             val gap = if (unit.isEmpty()) 0f else Ui.uf(5f)
             val start = cx - (valueWidth + gap + unitWidth) / 2f
-            val baseline = cy + Ui.uf(14f)
+            val baseline = cy + valuePaint.textSize * 0.36f
             canvas.drawText(value, start, baseline, valuePaint)
             if (unit.isNotEmpty()) canvas.drawText(unit, start + valueWidth + gap, baseline, unitPaint)
         }
 
-        private fun drawLegend(canvas: Canvas, cx: Float, cy: Float, size: Float) {
+        private fun drawLegend(canvas: Canvas, cx: Float, cy: Float, size: Float, discRadius: Float) {
             if (legend.isEmpty()) return
             legendPaint.color = T.TEXT2
             legendPaint.typeface = mediumTypeface
-            legendPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_LEGEND, size * 0.425f * 0.10f))
-            val maxWidth = size * 0.66f
+            legendPaint.textSize = Ui.uf(maxOf(T.Type.DIAL_LEGEND, discRadius * 0.17f))
+            val maxWidth = discRadius * 1.7f
             val lines = if (hasBottomIcon) listOf(fit(legend, maxWidth, legendPaint)) else wrapLegend(legend, maxWidth, legendPaint)
-            var y = cy + Ui.uf(if (hasBottomIcon) 42f else 46f)
+            var y = cy + discRadius * (if (hasBottomIcon) 0.42f else 0.46f)
             for (lineText in lines) {
                 canvas.drawText(lineText, cx, y, legendPaint)
-                y += Ui.uf(17f)
+                y += legendPaint.textSize * 1.15f
             }
         }
 
@@ -750,7 +753,7 @@ class HoldRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(if (flat) 34 else 30), Ui.u(if (flat) 34 else 30), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 44 else 30), Ui.u(if (flat) 44 else 30), Gravity.CENTER))
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -837,16 +840,16 @@ class MiniCircle(
     private val bar = View(context).apply { setBackgroundColor(T.BOTANICAL) }
 
     init {
-        val iconSize = (size * 0.22f).toInt()
-        val barWidth = (size * 0.30f).toInt()
+        val iconSize = (size * 0.34f).toInt()
+        val barWidth = (size * 0.42f).toInt()
         val column = Ui.vertical(context, Gravity.CENTER_HORIZONTAL)
         column.addView(icon, Ui.lp(Ui.u(iconSize), Ui.u(iconSize)))
         // Une seule ligne : sans largeur bornée, « 22 °C » se repliait hors du disque.
-        value.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.uf(size * 0.16f))
+        value.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.uf(size * 0.24f))
         value.isSingleLine = true
         value.gravity = Gravity.CENTER
-        column.addView(value, Ui.lp(Ui.u((size * 0.82f).toInt()), Ui.WRAP, t = 2))
-        if (showBar) column.addView(bar, Ui.lp(Ui.u(barWidth), Ui.u(3), t = 3))
+        column.addView(value, Ui.lp(Ui.u((size * 0.94f).toInt()), Ui.WRAP, t = 1))
+        if (showBar) column.addView(bar, Ui.lp(Ui.u(barWidth), Ui.u(3), t = 2))
         face.addView(column, FrameLayout.LayoutParams(Ui.WRAP, Ui.WRAP, Gravity.CENTER))
         addView(face, FrameLayout.LayoutParams(Ui.u(size), Ui.u(size)))
     }
