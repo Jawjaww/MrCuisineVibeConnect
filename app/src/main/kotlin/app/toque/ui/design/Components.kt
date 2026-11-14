@@ -104,7 +104,14 @@ object ShadowLayer {
         bottomFull: Float,
     ): Bitmap {
         require(diameterPx > 0)
-        val key = (diameterPx.toLong() shl 32) or (spreadPx.toLong() shl 8) or maxAlpha.toLong() or (tag shl 62)
+        // La clé doit distinguer TOUS les paramètres : sinon une ombre `contact` servait pour
+        // un appel `drop` de même diamètre, et le rendu devenait faux de façon intermittente.
+        val key = (diameterPx.toLong() shl 32) or
+            (spreadPx.toLong() shl 16) or
+            (maxAlpha.toLong() shl 8) or
+            (topFade.toLong() shl 4) or
+            (bottomFull.toLong() shl 3) or
+            tag
         cache[key]?.let { return it }
         val side = diameterPx + 2 * spreadPx
         val pixels = IntArray(side * side)
@@ -408,6 +415,7 @@ class Dial(
         private var progress = 0f
         private var marker: Float? = null
         private var staticLayer: Bitmap? = null
+        private var shadowBitmap: Bitmap? = null
         private var lastAngle = Float.NaN
         private var accumulated = 0f
         private var pointerPos = 0f
@@ -511,6 +519,8 @@ class Dial(
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             staticLayer?.recycle()
             staticLayer = null
+            // L'ombre est partagée par le cache global : on lâche la référence sans la recycler.
+            shadowBitmap = null
         }
 
         override fun onDraw(canvas: Canvas) {
@@ -521,8 +531,10 @@ class Dial(
             val cy = height / 2f
             val r = size * DISC_RATIO
 
-            // Ombre précalculée et douce : une seule image, rien à calculer par image.
-            val shadow = ShadowLayer.contact((2 * r).toInt(), Ui.u(8), 28)
+            // Ombre résolue une seule fois par taille : la clé du cache ne change jamais
+            // entre deux images, donc aucun calcul de pénombre pendant l'animation.
+            val shadow = shadowBitmap ?: ShadowLayer.contact((2 * r).toInt(), Ui.u(8), 28)
+                .also { shadowBitmap = it }
             canvas.drawBitmap(shadow, cx - shadow.width / 2f, cy + Ui.uf(3f) - shadow.height / 2f, null)
             canvas.drawBitmap(staticLayer ?: buildLayer(cx, cy, r).also { staticLayer = it }, 0f, 0f, null)
 
