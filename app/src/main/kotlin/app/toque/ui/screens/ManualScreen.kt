@@ -105,16 +105,16 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
             FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
         )
 
-        directionToggle = ToggleRoundButton(c) { setReverse(!reverse) }
+        directionToggle = ToggleRoundButton(c, flat = true) { setReverse(!reverse) }
         directionToggle.configure(tr("Inverse"), Icon.Kind.REVERSE, tr("Sens normal"), Icon.Kind.SYNC)
-        accessoryToggle = ToggleRoundButton(c) {
+        accessoryToggle = ToggleRoundButton(c, flat = true) {
             setAccessory(if (accessory == Accessory.BLADE) Accessory.WHISK else Accessory.BLADE)
         }
         accessoryToggle.configure(tr("Fouet"), Icon.Kind.WHISK, tr("Lame"), Icon.Kind.BLADE)
         turbo = HoldRoundButton(c, tr("Turbo"), onDown = {
             a.machine.turboDown(accessory) { verdict -> if (!verdict.ok) a.refusal(verdict) }
-        }, onUp = { a.machine.turboUp() })
-        val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser")) { a.push(ScaleScreen(a)) }
+        }, onUp = { a.machine.turboUp() }, flat = true)
+        val weigh = RoundButton(c, Icon.Kind.SCALE, tr("Peser"), flat = true) { a.push(ScaleScreen(a)) }
 
         // --- Peser et Turbo vont jusqu'aux bords de l'écran ; les deux bascules restent dans
         // les creux entre les cadrans. Elles vivent toutes sous la ligne des − / +.

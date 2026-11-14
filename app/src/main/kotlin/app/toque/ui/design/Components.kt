@@ -208,11 +208,14 @@ class SoftCircle(
     alpha: Int = 46,
     cast: Boolean = false,
     face: Int = T.BUTTON_FACE,
+    flat: Boolean = false,
 ) : FrameLayout(context) {
     init {
         isClickable = true
         isFocusable = true
-        background = DiscBackground(spread, alpha, cast, face)
+        // Style plat de la référence : pas de disque blanc, seulement l'icône sur la surface.
+        background = if (flat) Ui.pressable(Ui.round(0, T.Radius.CARD_SM), T.Radius.CARD_SM)
+        else DiscBackground(spread, alpha, cast, face)
     }
 }
 
@@ -233,6 +236,7 @@ class RoundButton(
     size: Int = 67,
     private val castShadow: Boolean = false,
     private val shadowAlpha: Int? = null,
+    private val flat: Boolean = false,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = if (size < 64) 6 else 9
@@ -245,6 +249,7 @@ class RoundButton(
         alpha = shadowAlpha ?: 32,
         cast = castShadow,
         face = if (castShadow) T.BUTTON_FACE else T.SURFACE,
+        flat = flat,
     )
     private val icon = Icon(context, iconKind, T.BRAND)
     private val caption: TextView? = if (label.isNotEmpty()) Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM) else null
@@ -285,10 +290,11 @@ class RoundButton(
 class ToggleRoundButton(
     context: Context,
     size: Int = 67,
+    private val flat: Boolean = false,
     private val action: () -> Unit = {},
 ) : LinearLayout(context) {
     private val spread = 9
-    private val circle = SoftCircle(context, spread = spread, alpha = 58)
+    private val circle = SoftCircle(context, spread = spread, alpha = 58, flat = flat)
     private val icon = Icon(context, Icon.Kind.SYNC, T.BRAND)
     private val caption = Ui.text(context, "", T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var on = false
@@ -300,7 +306,7 @@ class ToggleRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(30), Ui.u(30), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 34 else 30), Ui.u(if (flat) 34 else 30), Gravity.CENTER))
         circle.setOnClickListener {
             if (isEnabled) {
                 on = !on
@@ -372,16 +378,13 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         face.hasBottomIcon = showBottom
         val box = FrameLayout(context)
         box.addView(face, Ui.flp(Ui.u(size), Ui.u(size)))
+        // Référence : une seule icône, placée sous la valeur (au-dessus des − / +).
         box.addView(
             Icon(context, topIcon, T.TEXT),
-            Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = Ui.u(iconMargin) },
+            Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                bottomMargin = Ui.u(iconMargin)
+            },
         )
-        if (showBottom) {
-            box.addView(
-                Icon(context, bottomIcon!!, T.TEXT),
-                Ui.flp(Ui.u(iconSize), Ui.u(iconSize), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = Ui.u(iconMargin) },
-            )
-        }
         addView(box, LinearLayout.LayoutParams(Ui.u(size), Ui.u(size)))
         val actions = Ui.horizontal(context, Gravity.CENTER)
         actions.addView(minus, Ui.lp(Ui.u(minus.outerSize), Ui.u(minus.outerSize), r = 8))
@@ -655,9 +658,10 @@ class HoldRoundButton(
     label: String,
     private val onDown: () -> Unit,
     private val onUp: () -> Unit,
+    private val flat: Boolean = false,
 ) : LinearLayout(context) {
     private val spread = 9
-    private val circle = SoftCircle(context, spread = spread, alpha = 58)
+    private val circle = SoftCircle(context, spread = spread, alpha = 58, flat = flat)
     private val icon = Icon(context, Icon.Kind.BOLT, T.BRAND)
     private val caption = Ui.text(context, label, T.Type.CAPTION, T.TEXT, Ui.MEDIUM)
     private var held = false
@@ -665,7 +669,7 @@ class HoldRoundButton(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        circle.addView(icon, Ui.flp(Ui.u(30), Ui.u(30), Gravity.CENTER))
+        circle.addView(icon, Ui.flp(Ui.u(if (flat) 34 else 30), Ui.u(if (flat) 34 else 30), Gravity.CENTER))
         circle.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
