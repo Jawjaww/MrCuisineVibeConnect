@@ -22,7 +22,7 @@ import app.toque.ui.Screen
 import app.toque.ui.Ui
 import app.toque.ui.design.Dial
 import app.toque.ui.design.HoldRoundButton
-import app.toque.ui.design.PrimaryButton
+import app.toque.ui.design.PlayButton
 import app.toque.ui.design.MiniCircle
 import app.toque.ui.design.RoundButton
 import app.toque.ui.screens.ScaleScreen
@@ -44,7 +44,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
     private lateinit var speedDial: Dial
     private lateinit var directionToggle: ToggleRoundButton
     private lateinit var accessoryToggle: ToggleRoundButton
-    private lateinit var startButton: PrimaryButton
+    private lateinit var startButton: PlayButton
     private lateinit var hint: TextView
     private lateinit var turbo: HoldRoundButton
     private lateinit var weightMini: MiniCircle
@@ -65,7 +65,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // et 56 pour Démarrer. D'où 320 pour les cadrans, le maximum vérifié.
         val button = 96
         val gap = 6
-        dialSize = 320
+        dialSize = 290
         val groupWidth = 3 * dialSize + 2 * gap
         val controlsTop = dialSize + 23 + 4
 
@@ -118,39 +118,28 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
 
         // --- Peser et Turbo vont jusqu'aux bords de l'écran ; les deux bascules restent dans
         // les creux entre les cadrans. Elles vivent toutes sous la ligne des − / +.
-        dash.addView(
-            weigh,
-            FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP).apply { topMargin = Ui.u(controlsTop) },
-        )
-        dash.addView(
-            turbo,
-            FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP, Gravity.TOP or Gravity.END).apply {
-                topMargin = Ui.u(controlsTop)
-            },
-        )
-        val middle = FrameLayout(c)
-        for ((index, control) in listOf(directionToggle, accessoryToggle).withIndex()) {
-            middle.addView(
-                control,
-                FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP).apply {
-                    leftMargin = Ui.u(dialSize + gap / 2 - button / 2 + index * (dialSize + gap))
-                },
-            )
+        // Rangée régulière en bas : quatre commandes à égale distance, comme la référence.
+        val controlsRow = Ui.horizontal(c)
+        for (control in listOf(weigh, directionToggle, accessoryToggle, turbo)) {
+            val cell = FrameLayout(c)
+            cell.addView(control, FrameLayout.LayoutParams(Ui.u(button), Ui.WRAP, Gravity.CENTER_HORIZONTAL))
+            controlsRow.addView(cell, LinearLayout.LayoutParams(0, Ui.WRAP, 1f))
         }
         dash.addView(
-            middle,
-            FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                topMargin = Ui.u(controlsTop)
+            controlsRow,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP, Gravity.BOTTOM).apply {
+                bottomMargin = Ui.u(4)
             },
         )
 
         // --- Démarrer, dans l'angle bas-droit.
-        startButton = PrimaryButton(c, tr("Démarrer")) { start() }
+        startButton = PlayButton(c) { start() }
+        val play = FrameLayout(c)
+        play.addView(startButton, FrameLayout.LayoutParams(Ui.u(96), Ui.u(96), Gravity.CENTER))
         dash.addView(
-            startButton,
-            FrameLayout.LayoutParams(Ui.u(190), Ui.u(56), Gravity.BOTTOM or Gravity.END).apply {
-                rightMargin = Ui.u(16)
-                bottomMargin = Ui.u(6)
+            play,
+            FrameLayout.LayoutParams(Ui.MATCH, Ui.u(96), Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = Ui.u(dialSize + 23 + 10)
             },
         )
 
@@ -385,7 +374,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // La barre machine a son propre bouton de reprise : Démarrer laisse la place entière
         // à la zone basse dès qu'un programme est actif.
         startButton.visibility = if (s.jobActive || s.turboActive || s.hasFault) View.GONE else View.VISIBLE
-        startButton.setLabel(if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer"))
+        startButton.contentDescription =
+            if (s.state == JobState.PAUSED && manualJob) tr("Reprendre") else tr("Démarrer")
         turbo.setButtonEnabled(!busy || s.turboActive)
         if (live) setHint(tr("Réglages appliqués en direct"))
         else if (!busy) refreshHintOnly()

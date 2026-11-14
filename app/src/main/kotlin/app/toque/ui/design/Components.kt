@@ -622,6 +622,33 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
 }
 
 /** Contrôle principal tactile : dégradé statique, libellé large, focus explicite. */
+/** Bouton de lecture circulaire, comme sur la référence : anneau vert et triangle. */
+class PlayButton(context: Context, private val action: () -> Unit) : FrameLayout(context) {
+    private val ring = SoftCircle(context, spread = 8, alpha = 30)
+    private val icon = Icon(context, Icon.Kind.PLAY, T.BRAND)
+
+    init {
+        // Le disque ne doit pas capter le toucher : c'est le bouton entier qui le reçoit.
+        ring.isClickable = false
+        ring.isFocusable = false
+        ring.addView(icon, Ui.flp(Ui.u(38), Ui.u(38), Gravity.CENTER))
+        ring.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(T.SURFACE)
+            setStroke(Ui.u(T.Line.FOCUS), T.BRAND)
+        }
+        addView(ring, LayoutParams(Ui.u(96), Ui.u(96)))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { if (isEnabled) action() }
+    }
+
+    fun setEnabledState(enabled: Boolean) {
+        isEnabled = enabled
+        alpha = if (enabled) 1f else T.DISABLED_ALPHA
+    }
+}
+
 class PrimaryButton(
     context: Context,
     label: String,
