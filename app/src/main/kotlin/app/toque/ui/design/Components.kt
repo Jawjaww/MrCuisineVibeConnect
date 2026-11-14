@@ -423,7 +423,10 @@ class Dial(
         private var animating = false
 
         private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val bandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val tickShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
@@ -571,35 +574,82 @@ class Dial(
             drawReadout(canvas, cx, cy, r)
         }
 
-        /** Matière et graduations ne changent jamais : un seul bitmap recyclé lors d'un resize. */
+        /**
+         * Matière, double contour, graduations et leurs ombres sont composées une seule fois
+         * dans ce bitmap, recyclé uniquement quand la taille change. Rien n'est recalculé
+         * pendant l'animation : seuls la bague de progression et le repère sont redessinés.
+         */
         private fun buildLayer(cx: Float, cy: Float, r: Float): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            // Un galbe vertical presque imperceptible, sans gris métallisé ni double bord.
-            bodyPaint.shader = LinearGradient(
+
+            // --- 1. Bague extérieure : matière la plus sombre, elle fait le tour du bouton.
+            bandPaint.style = Paint.Style.FILL
+            bandPaint.shader = LinearGradient(
                 cx, cy - r, cx, cy + r,
-                intArrayOf(T.BUTTON_FACE, T.BUTTON_FACE, T.SURFACE2),
-                floatArrayOf(0f, 0.88f, 1f),
+                intArrayOf(BAND_TOP, BAND_BOTTOM),
+                floatArrayOf(0f, 1f),
                 Shader.TileMode.CLAMP,
             )
-            canvas.drawCircle(cx, cy, r, bodyPaint)
-            bodyPaint.shader = null
+            canvas.drawCircle(cx, cy, r, bandPaint)
+            bandPaint.shader = null
 
-            // L'arête extérieure unique remplace les filets concentriques et encoches précédentes.
-            edgePaint.color = withAlpha(T.STROKE, 0xFF)
+            // --- 2. Espace de séparation : un anneau franchement plus clair, d'un peu
+            //     plus d'une unité, qui creuse la rainure entre les deux contours.
+            val gapOuter = r - Ui.uf(BAND_WIDTH)
+            bandPaint.color = GAP_COLOR
+            canvas.drawCircle(cx, cy, gapOuter, bandPaint)
+
+            // --- 3. Le bouton lui-même : dégradé vertical, clair en haut, ivoire soutenu en bas.
+            val faceR = gapOuter - Ui.uf(GAP_WIDTH)
+            facePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(FACE_TOP, FACE_MID, FACE_BOTTOM),
+                floatArrayOf(0f, 0.48f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR, facePaint)
+            facePaint.shader = null
+
+            // --- 4. Creux 3D : le disque est légèrement enfoncé. L'ombre tombe du côté
+            //     haut-gauche, la lumière remonte en bas-droite, comme une coupelle éclairée.
+            facePaint.shader = LinearGradient(
+                cx - faceR * 0.7f, cy - faceR, cx + faceR * 0.7f, cy + faceR,
+                intArrayOf(withAlpha(SHADE, 0x2E), 0x00000000, withAlpha(GLOW, 0x38)),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR, facePaint)
+            facePaint.shader = null
+
+            // --- 5. Filet intérieur du creux, à l'intérieur de la face.
+            edgePaint.color = withAlpha(RING_INNER_COLOR, 0x86)
             edgePaint.strokeWidth = Ui.uf(1f)
-            canvas.drawCircle(cx, cy, r - Ui.uf(0.5f), edgePaint)
+            canvas.drawCircle(cx, cy, faceR - Ui.uf(0.5f), edgePaint)
 
-            // Graduations régulières, allongées et légères, autour du bouton et non dans sa face.
-            tickPaint.strokeWidth = Ui.uf(1.1f)
-            tickPaint.color = withAlpha(T.STROKE_STRONG, 0x78)
-            for (i in 0..54) {
-                val a = Math.toRadians((START_ANGLE + SWEEP_ANGLE * i / 54f).toDouble())
-                val inner = r + Ui.uf(5f)
-                val outer = r + Ui.uf(13f)
+            // --- 6. Graduations : chacune porte son ombre vers le bas-droit avant le trait.
+            val tickCount = 54
+            for (i in 0..tickCount) {
+                val angle = Math.toRadians((START_ANGLE + SWEEP_ANGLE * i / tickCount.toFloat()).toDouble())
+                val cos = Math.cos(angle).toFloat()
+                val sin = Math.sin(angle).toFloat()
+                val inner = r + Ui.uf(TICK_START)
+                val outer = r + Ui.uf(TICK_END)
+                val major = i % 9 == 0
+
+                tickShadow.strokeWidth = Ui.uf(if (major) 1.8f else 1.4f)
+                tickShadow.color = withAlpha(SHADE, if (major) 0x50 else 0x3A)
                 canvas.drawLine(
-                    cx + inner * Math.cos(a).toFloat(), cy + inner * Math.sin(a).toFloat(),
-                    cx + outer * Math.cos(a).toFloat(), cy + outer * Math.sin(a).toFloat(),
+                    cx + inner * cos + Ui.uf(0.7f), cy + inner * sin + Ui.uf(1.0f),
+                    cx + outer * cos + Ui.uf(0.7f), cy + outer * sin + Ui.uf(1.0f),
+                    tickShadow,
+                )
+
+                tickPaint.strokeWidth = Ui.uf(if (major) 1.6f else 1.1f)
+                tickPaint.color = withAlpha(TICK_COLOR, if (major) 0xC8 else 0x8E)
+                canvas.drawLine(
+                    cx + inner * cos, cy + inner * sin,
+                    cx + outer * cos, cy + outer * sin,
                     tickPaint,
                 )
             }
@@ -648,6 +698,23 @@ class Dial(
         private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
 
         private companion object {
+            // Relief du bouton, en unités de la grille 1024×600.
+            const val BAND_WIDTH = 5.0f
+            const val GAP_WIDTH = 1.8f
+            const val TICK_START = 4.0f
+            const val TICK_END = 15.0f
+
+            const val BAND_TOP = 0xFFE8DFD1.toInt()
+            const val BAND_BOTTOM = 0xFFA8957A.toInt()
+            const val GAP_COLOR = 0xFFFFFDF9.toInt()
+            const val FACE_TOP = 0xFFFFFFFF.toInt()
+            const val FACE_MID = 0xFFFDFAF4.toInt()
+            const val FACE_BOTTOM = 0xFFE9DFCF.toInt()
+            const val SHADE = 0xFF5B4A33.toInt()
+            const val GLOW = 0xFFFFFFFF.toInt()
+            const val RING_INNER_COLOR = 0xFFB3A183.toInt()
+            const val TICK_COLOR = 0xFF7D6E57.toInt()
+
             const val START_ANGLE = 135f
             const val SWEEP_ANGLE = 270f
             const val STEP_DEGREES = 3f
