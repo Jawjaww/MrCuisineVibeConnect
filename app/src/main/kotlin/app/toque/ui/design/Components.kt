@@ -615,17 +615,23 @@ class Dial(
             //     haut-gauche, la lumière remonte en bas-droite, comme une coupelle éclairée.
             facePaint.shader = LinearGradient(
                 cx - faceR * 0.7f, cy - faceR, cx + faceR * 0.7f, cy + faceR,
-                intArrayOf(withAlpha(SHADE, 0x2E), 0x00000000, withAlpha(GLOW, 0x38)),
+                intArrayOf(withAlpha(SHADE, 0x4A), 0x00000000, withAlpha(GLOW, 0x66)),
                 floatArrayOf(0f, 0.55f, 1f),
                 Shader.TileMode.CLAMP,
             )
             canvas.drawCircle(cx, cy, faceR, facePaint)
             facePaint.shader = null
 
-            // --- 5. Filet intérieur du creux, à l'intérieur de la face.
-            edgePaint.color = withAlpha(RING_INNER_COLOR, 0x86)
-            edgePaint.strokeWidth = Ui.uf(1f)
-            canvas.drawCircle(cx, cy, faceR - Ui.uf(0.5f), edgePaint)
+            // --- 5. Arête du creux : ombre en haut, lumière en bas, comme une cuvette.
+            edgePaint.strokeWidth = Ui.uf(1.4f)
+            edgePaint.shader = LinearGradient(
+                cx, cy - faceR, cx, cy + faceR,
+                intArrayOf(withAlpha(SHADE, 0x62), withAlpha(SHADE, 0x00), withAlpha(GLOW, 0x8C)),
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, faceR - Ui.uf(0.7f), edgePaint)
+            edgePaint.shader = null
 
             // --- 6. Graduations : chacune porte son ombre vers le bas-droit avant le trait.
             val tickCount = 54
@@ -638,10 +644,10 @@ class Dial(
                 val major = i % 9 == 0
 
                 tickShadow.strokeWidth = Ui.uf(if (major) 1.8f else 1.4f)
-                tickShadow.color = withAlpha(SHADE, if (major) 0x50 else 0x3A)
+                tickShadow.color = withAlpha(SHADE, if (major) 0x74 else 0x58)
                 canvas.drawLine(
-                    cx + inner * cos + Ui.uf(0.7f), cy + inner * sin + Ui.uf(1.0f),
-                    cx + outer * cos + Ui.uf(0.7f), cy + outer * sin + Ui.uf(1.0f),
+                    cx + inner * cos + Ui.uf(1.1f), cy + inner * sin + Ui.uf(1.6f),
+                    cx + outer * cos + Ui.uf(1.1f), cy + outer * sin + Ui.uf(1.6f),
                     tickShadow,
                 )
 
@@ -704,12 +710,12 @@ class Dial(
             const val TICK_START = 4.0f
             const val TICK_END = 15.0f
 
-            const val BAND_TOP = 0xFFE8DFD1.toInt()
-            const val BAND_BOTTOM = 0xFFA8957A.toInt()
-            const val GAP_COLOR = 0xFFFFFDF9.toInt()
+            const val BAND_TOP = 0xFFF0E7DA.toInt()
+            const val BAND_BOTTOM = 0xFF8F7A5E.toInt()
+            const val GAP_COLOR = 0xFFFFFEFB.toInt()
             const val FACE_TOP = 0xFFFFFFFF.toInt()
-            const val FACE_MID = 0xFFFDFAF4.toInt()
-            const val FACE_BOTTOM = 0xFFE9DFCF.toInt()
+            const val FACE_MID = 0xFFFBF5EA.toInt()
+            const val FACE_BOTTOM = 0xFFD8C9AE.toInt()
             const val SHADE = 0xFF5B4A33.toInt()
             const val GLOW = 0xFFFFFFFF.toInt()
             const val RING_INNER_COLOR = 0xFFB3A183.toInt()
