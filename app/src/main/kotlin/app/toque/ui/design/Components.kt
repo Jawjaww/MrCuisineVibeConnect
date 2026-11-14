@@ -435,6 +435,9 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val pointerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val galbePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
         private val pointer = Path()
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
         private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.LEFT }
@@ -456,6 +459,23 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
         private var lastAngle = Float.NaN
         private var accumulated = 0f
         private val stepDegrees = 270f / 90f
+
+        /** Position affichée de l'encoche : elle glisse vers sa cible, elle ne saute pas. */
+        private var pointerPos = 0f
+        private var pointerTarget = 0f
+        private var animating = false
+        private val animTick = Runnable {
+            val delta = pointerTarget - pointerPos
+            if (delta < 0.0015f && delta > -0.0015f) {
+                pointerPos = pointerTarget
+                animating = false
+            } else {
+                // Amorti doux : 22 % d'écart absorbé par image, ~120 ms pour se stabiliser.
+                pointerPos += delta * 0.22f
+                postInvalidateOnAnimation()
+            }
+            invalidate()
+        }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
             when (event.actionMasked) {
@@ -513,6 +533,11 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             this.legend = legend
             this.progress = progress.coerceIn(0f, 1f)
             this.marker = marker?.coerceIn(0f, 1f)
+            pointerTarget = this.marker ?: this.progress
+            if (!animating && pointerPos != pointerTarget) {
+                animating = true
+                postInvalidateOnAnimation()
+            }
             invalidate()
         }
 
@@ -526,6 +551,8 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             super.onDraw(canvas)
             val size = minOf(width, height).toFloat()
             if (size <= 0f) return
+            // Amorçage de l'animation : une seule boucle tant qu'elle n'est pas stabilisée.
+            if (animating) removeCallbacks(animTick).also { post(animTick) }
             val cx = width / 2f
             val cy = height / 2f
             // Le disque occupe 87 % de la vue : le reste est la place de la pénombre.
@@ -557,27 +584,40 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             arcPaint.color = T.BOTANICAL
             if (progress > 0f) canvas.drawArc(bounds, 135f, 270f * progress, false, arcPaint)
 
-            // Indicateur de position : une flèche dans la couronne. C'est elle qui donne
-            // l'impression que le bouton tourne, sans faire pivoter la valeur.
-            val pointerAt = marker ?: progress
-            val pointerAngle = (135f + 270f * pointerAt).toDouble()
-            val rad = Math.toRadians(pointerAngle)
-            val tipR = radius + Ui.uf(4f)
-            val baseR = radius + Ui.uf(19f)
-            val halfW = Ui.uf(7f)
-            val tipX = cx + (tipR * Math.cos(rad)).toFloat()
-            val tipY = cy + (tipR * Math.sin(rad)).toFloat()
-            val perpX = -Math.sin(rad).toFloat() * halfW
-            val perpY = Math.cos(rad).toFloat() * halfW
-            val baseX = (cx + (baseR * Math.cos(rad)).toFloat())
-            val baseY = (cy + (baseR * Math.sin(rad)).toFloat())
+            // Indicateur intégré : une encoche taillée dans le bord du bouton, à la position
+            // courante, et une ligne d'accroche qui la relie aux graduations. Plus de pièce
+            // rapportée flottant dans la couronne.
+            val notchAngle = 135f + 270f * pointerPos
+            val rad = Math.toRadians(notchAngle.toDouble())
+            val cosA = Math.cos(rad).toFloat()
+            val sinA = Math.sin(rad).toFloat()
+            val notchHalf = Ui.uf(9f)
+            val notchDepth = Ui.uf(16f)
             pointer.reset()
-            pointer.moveTo(tipX, tipY)
-            pointer.lineTo(baseX + perpX, baseY + perpY)
-            pointer.lineTo(baseX - perpX, baseY - perpY)
+            pointer.moveTo(cx + cosA * (radius - notchDepth), cy + sinA * (radius - notchDepth))
+            pointer.lineTo(
+                cx + (cosA * radius) - (-sinA * notchHalf),
+                cy + (sinA * radius) - (cosA * notchHalf),
+            )
+            pointer.lineTo(
+                cx + (cosA * radius) + (-sinA * notchHalf),
+                cy + (sinA * radius) + (cosA * notchHalf),
+            )
             pointer.close()
-            pointerPaint.color = T.BRAND
+            pointerPaint.color = T.SURFACE3
             canvas.drawPath(pointer, pointerPaint)
+            rimPaint.color = T.BRAND
+            rimPaint.strokeWidth = Ui.uf(2f)
+            canvas.drawPath(pointer, rimPaint)
+
+            // Ligne d'accroche : de l'encoche vers les graduations.
+            arcPaint.strokeWidth = Ui.uf(2.2f)
+            arcPaint.color = T.BRAND
+            canvas.drawLine(
+                cx + cosA * (radius + Ui.uf(15f)), cy + sinA * (radius + Ui.uf(15f)),
+                cx + cosA * (radius + Ui.uf(23f)), cy + sinA * (radius + Ui.uf(23f)),
+                arcPaint,
+            )
 
             drawValue(canvas, cx, cy, size)
             drawLegend(canvas, cx, cy, size, radius)
@@ -587,17 +627,35 @@ class Dial(context: Context, private val topIcon: Icon.Kind, private val bottomI
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            discPaint.color = T.BUTTON_FACE
-            discPaint.style = Paint.Style.FILL
-            canvas.drawCircle(cx, cy, radius, discPaint)
+            // --- Matière : galbe radial doux, du centre ivoire vers le bord légèrement ombré.
+            galbePaint.shader = RadialGradient(
+                cx, cy, radius,
+                intArrayOf(T.BUTTON_FACE, T.BUTTON_FACE, T.SURFACE3),
+                floatArrayOf(0f, 0.92f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawCircle(cx, cy, radius, galbePaint)
+            galbePaint.shader = null
 
-            // Graduations strictement identiques, dans une couronne EXTÉRIEURE au disque.
-            tickPaint.strokeWidth = Ui.uf(1.4f)
-            tickPaint.color = T.TICK
+            // --- Filet intérieur : la « coupe » franche du métal, à 3 unités du bord.
+            rimPaint.color = withAlpha(T.STROKE, 0xD0)
+            rimPaint.strokeWidth = Ui.uf(1f)
+            canvas.drawCircle(cx, cy, radius - Ui.uf(3f), rimPaint)
+
+            // --- Liseré lumineux : l'arête qui accroche la lumière, uniquement sur le haut.
+            lightPaint.color = withAlpha(0xFFFFFFFF.toInt(), 0x48)
+            lightPaint.strokeWidth = Ui.uf(1.2f)
+            val lightBox = RectF(cx - radius + Ui.uf(1.6f), cy - radius + Ui.uf(1.6f),
+                cx + radius - Ui.uf(1.6f), cy + radius - Ui.uf(1.6f))
+            canvas.drawArc(lightBox, 188f, 164f, false, lightPaint)
+
+            // --- Graduations feutrées : courtes et discrètes, jamais concurrentes de la valeur.
+            tickPaint.strokeWidth = Ui.uf(1f)
+            tickPaint.color = withAlpha(T.TICK, 0xB4)
             for (i in 0..44) {
                 val angle = Math.toRadians((135 + i * 6).toDouble())
-                val inner = radius + Ui.uf(6f)
-                val outer = radius + Ui.uf(15f)
+                val inner = radius + Ui.uf(5f)
+                val outer = radius + Ui.uf(14f)
                 canvas.drawLine(
                     cx + (inner * Math.cos(angle)).toFloat(),
                     cy + (inner * Math.sin(angle)).toFloat(),

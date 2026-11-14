@@ -65,7 +65,8 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         // et 56 pour Démarrer. D'où 320 pour les cadrans, le maximum vérifié.
         val button = 96
         val gap = 6
-        dialSize = 300
+        // Le plus grand bouton qui laisse intactes les mini-cadrans et la rangée de commandes.
+        dialSize = 340
         val groupWidth = 3 * dialSize + 2 * gap
         val controlsTop = dialSize + 4
 
@@ -103,7 +104,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         dash.addView(
             group,
             FrameLayout.LayoutParams(Ui.u(groupWidth), Ui.WRAP, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                topMargin = Ui.u(34)
+                topMargin = Ui.u(24)
             },
         )
 
@@ -141,7 +142,7 @@ class ManualScreen(a: MainActivity, preset: app.toque.core.recipes.StepMachine? 
         dash.addView(
             play,
             FrameLayout.LayoutParams(Ui.MATCH, Ui.u(96), Gravity.CENTER_HORIZONTAL).apply {
-                topMargin = Ui.u(34 + dialSize + 12)
+                topMargin = Ui.u(24 + dialSize)
             },
         )
 
